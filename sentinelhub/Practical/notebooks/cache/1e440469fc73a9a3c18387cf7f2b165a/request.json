@@ -1,0 +1,24 @@
+{
+    "request": {
+        "headers": {},
+        "payload": null,
+        "timestamp": "2025-02-17T12:37:09.811324",
+        "url": "https://services.sentinel-hub.com/ogc/wcs/249429ee-5c8f-4d29-8f91-3171b17578ad?SERVICE=wcs&WARNINGS=False&MAXCC=100.0&BBOX=46.11%2C14.26%2C46.26%2C14.51&FORMAT=image%2Ftiff&CRS=EPSG%3A4326&TIME=2022-04-20T10%3A07%3A47Z%2F2022-04-20T10%3A07%3A47Z&RESX=60m&RESY=60m&COVERAGE=TRUE-COLOR-S2-L1C&REQUEST=GetCoverage&VERSION=1.1.2"
+    },
+    "response": {
+        "elapsed": 1.795824,
+        "headers": {
+            "Connection": "keep-alive",
+            "Content-Type": "image/tiff",
+            "Date": "Mon, 17 Feb 2025 10:37:09 GMT",
+            "Transfer-Encoding": "chunked",
+            "access-control-allow-credentials": "true",
+            "access-control-allow-headers": "origin, content-type, accept, accept-crs, authorization, cache-control",
+            "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
+            "access-control-allow-origin": "*",
+            "access-control-max-age": "3600",
+            "x-processingunits-spent": "0.34041595458984375"
+        },
+        "status_code": 200
+    }
+}
