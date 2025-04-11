@@ -355,6 +355,5 @@ def main():
     
     print("\nAgricultural stress detection prototype completed successfully.")
 
-
 if __name__ == "__main__":
     main()
