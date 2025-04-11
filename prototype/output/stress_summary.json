@@ -1,0 +1,17 @@
+{
+    "region": "North Kivu, DRC",
+    "baseline_period": "2024-01-01 to 2024-03-31",
+    "current_period": "2024-04-01 to 2024-06-30",
+    "stress_levels": {
+        "no_stress": 50,
+        "low_stress": 30,
+        "moderate_stress": 15,
+        "high_stress": 5
+    },
+    "affected_crops": [
+        "Cassava",
+        "Maize",
+        "Plantains"
+    ],
+    "potential_impact": "Moderate risk to food security in conflict-affected areas"
+}

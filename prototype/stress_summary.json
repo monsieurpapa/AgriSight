@@ -1,0 +1,25 @@
+{
+    "region": "North Kivu, DRC",
+    "baseline_period": "2024-01-01 to 2024-03-31",
+    "current_period": "2024-04-01 to 2024-06-30",
+    "stress_levels": {
+        "no_stress": 96,
+        "low_stress": 4,
+        "moderate_stress": 0,
+        "high_stress": 0
+    },
+    "affected_crops": [
+        "Cassava",
+        "Maize",
+        "Plantains",
+        "Beans"
+    ],
+    "potential_impact": "Low risk to food security, localized impacts in conflict hotspots",
+    "conflict_correlation": "High correlation between conflict intensity and agricultural stress",
+    "recommendations": [
+        "Prioritize food security interventions in northeastern areas",
+        "Monitor cassava production closely as primary staple crop",
+        "Establish early warning system for agricultural stress in conflict zones",
+        "Implement drought-resistant crop varieties in high-stress areas"
+    ]
+}
