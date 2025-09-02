@@ -1,10 +1,29 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
+const MapView = lazy(() => import('./pages/MapView'));
+const Regions = lazy(() => import('./pages/Regions'));
+const SatelliteData = lazy(() => import('./pages/SatelliteData'));
+const VegetationIndices = lazy(() => import('./pages/VegetationIndices'));
+const Analytics = lazy(() => import('./pages/Analytics'));
+const StressEvents = lazy(() => import('./pages/StressEvents'));
+const Alerts = lazy(() => import('./pages/Alerts'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Exports = lazy(() => import('./pages/Exports'));
+const Organizations = lazy(() => import('./pages/Organizations'));
+const AdminSettings = lazy(() => import('./pages/AdminSettings'));
+const AdminPerformance = lazy(() => import('./pages/AdminPerformance'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Terms = lazy(() => import('./pages/Terms'));
+const Support = lazy(() => import('./pages/Support'));
 import './App.css';
 
 // Create a query client
@@ -62,91 +81,13 @@ const PublicRoute = ({ children }) => {
 };
 
 // Placeholder components for other pages
-const MapView = () => (
-  <div className="text-center py-12">
-    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-      Interactive Map View
-    </h1>
-    <p className="text-gray-600 dark:text-gray-400">
-      Satellite imagery and vegetation index overlays will be displayed here.
-    </p>
-  </div>
-);
-
-const Regions = () => (
-  <div className="text-center py-12">
-    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-      Regions Management
-    </h1>
-    <p className="text-gray-600 dark:text-gray-400">
-      Manage and monitor agricultural regions in DRC.
-    </p>
-  </div>
-);
-
-const SatelliteData = () => (
-  <div className="text-center py-12">
-    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-      Satellite Data Processing
-    </h1>
-    <p className="text-gray-600 dark:text-gray-400">
-      View and process Sentinel-2 satellite imagery.
-    </p>
-  </div>
-);
-
-const VegetationIndices = () => (
-  <div className="text-center py-12">
-    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-      Vegetation Indices
-    </h1>
-    <p className="text-gray-600 dark:text-gray-400">
-      NDVI, EVI, NDWI, and SAVI analysis and trends.
-    </p>
-  </div>
-);
-
-const Analytics = () => (
-  <div className="text-center py-12">
-    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-      Advanced Analytics
-    </h1>
-    <p className="text-gray-600 dark:text-gray-400">
-      Deep insights and predictive analysis.
-    </p>
-  </div>
-);
-
-const StressEvents = () => (
-  <div className="text-center py-12">
-    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-      Agricultural Stress Events
-    </h1>
-    <p className="text-gray-600 dark:text-gray-400">
-      Monitor and manage agricultural stress events and anomalies.
-    </p>
-  </div>
-);
-
-const Alerts = () => (
-  <div className="text-center py-12">
-    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-      Alerts & Notifications
-    </h1>
-    <p className="text-gray-600 dark:text-gray-400">
-      System alerts and notification management.
-    </p>
-  </div>
-);
-
-const Reports = () => (
-  <div className="text-center py-12">
-    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-      Reports & Documentation
-    </h1>
-    <p className="text-gray-600 dark:text-gray-400">
-      Generate and view agricultural monitoring reports.
-    </p>
+// Route-level fallback
+const Fallback = () => (
+  <div className="min-h-[200px] flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mx-auto"></div>
+      <p className="mt-3 text-gray-600 dark:text-gray-400">Loading...</p>
+    </div>
   </div>
 );
 
@@ -177,15 +118,28 @@ function App() {
                 }
               >
                 <Route index element={<Dashboard />} />
-                <Route path="map" element={<MapView />} />
-                <Route path="regions" element={<Regions />} />
-                <Route path="satellite" element={<SatelliteData />} />
-                <Route path="vegetation" element={<VegetationIndices />} />
-                <Route path="analytics" element={<Analytics />} />
-                <Route path="stress-events" element={<StressEvents />} />
-                <Route path="alerts" element={<Alerts />} />
-                <Route path="reports" element={<Reports />} />
+                <Route path="map" element={<Suspense fallback={<Fallback />}><MapView /></Suspense>} />
+                <Route path="regions" element={<Suspense fallback={<Fallback />}><Regions /></Suspense>} />
+                <Route path="satellite" element={<Suspense fallback={<Fallback />}><SatelliteData /></Suspense>} />
+                <Route path="vegetation" element={<Suspense fallback={<Fallback />}><VegetationIndices /></Suspense>} />
+                <Route path="analytics" element={<Suspense fallback={<Fallback />}><Analytics /></Suspense>} />
+                <Route path="stress-events" element={<Suspense fallback={<Fallback />}><StressEvents /></Suspense>} />
+                <Route path="alerts" element={<Suspense fallback={<Fallback />}><Alerts /></Suspense>} />
+                <Route path="reports" element={<Suspense fallback={<Fallback />}><Reports /></Suspense>} />
+                <Route path="exports" element={<Suspense fallback={<Fallback />}><Exports /></Suspense>} />
+                <Route path="organizations" element={<Suspense fallback={<Fallback />}><Organizations /></Suspense>} />
+                <Route path="admin/settings" element={<Suspense fallback={<Fallback />}><AdminSettings /></Suspense>} />
+                <Route path="admin/performance" element={<Suspense fallback={<Fallback />}><AdminPerformance /></Suspense>} />
+                <Route path="profile" element={<Suspense fallback={<Fallback />}><Profile /></Suspense>} />
+                <Route path="settings" element={<Suspense fallback={<Fallback />}><Settings /></Suspense>} />
               </Route>
+
+              {/* Additional public routes */}
+              <Route path="/register" element={<Suspense fallback={<Fallback />}><Register /></Suspense>} />
+              <Route path="/forgot-password" element={<Suspense fallback={<Fallback />}><ForgotPassword /></Suspense>} />
+              <Route path="/privacy" element={<Suspense fallback={<Fallback />}><Privacy /></Suspense>} />
+              <Route path="/terms" element={<Suspense fallback={<Fallback />}><Terms /></Suspense>} />
+              <Route path="/support" element={<Suspense fallback={<Fallback />}><Support /></Suspense>} />
 
               {/* Catch all route */}
               <Route path="*" element={<Navigate to="/" replace />} />
