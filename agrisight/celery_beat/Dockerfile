@@ -4,9 +4,20 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies
+# Install system dependencies (GDAL/GEOS/PROJ and build tools)
 RUN apt-get update && apt-get install -y \
+    binutils \
+    libproj-dev \
+    gdal-bin \
+    libgdal-dev \
+    python3-gdal \
+    libgeos-dev \
+    libspatialite-dev \
+    spatialite-bin \
+    libsqlite3-mod-spatialite \
     postgresql-client \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Set work directory
