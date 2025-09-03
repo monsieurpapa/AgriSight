@@ -10,6 +10,11 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, Sp
 urlpatterns = [
     path('admin/', admin.site.urls),
     
+    # Authentication endpoints
+    path('api/auth/', include('apps.authentication.urls')),
+    path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+    path('accounts/', include('allauth.urls')),  # For social auth callbacks
+    
     # API endpoints
     path('api/v1/users/', include('apps.users.urls')),
     path('api/v1/organizations/', include('apps.organizations.urls')),
@@ -32,4 +37,3 @@ if settings.DEBUG:
 admin.site.site_header = "AgriSight Administration"
 admin.site.site_title = "AgriSight Admin"
 admin.site.index_title = "Welcome to AgriSight Administration"
-
