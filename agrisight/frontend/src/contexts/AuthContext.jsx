@@ -1,15 +1,14 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { authAPI } from '../lib/api';
+import { authAPI } from '../lib/authAPI';
 import { getErrorMessage } from '../lib/utils';
 
 // Initial state
 const initialState = {
   user: null,
-  organization: null,
-  token: null,
   isAuthenticated: false,
   isLoading: true,
   error: null,
+  authConfig: null,
 };
 
 // Action types
@@ -21,12 +20,17 @@ const AUTH_ACTIONS = {
   SET_LOADING: 'SET_LOADING',
   CLEAR_ERROR: 'CLEAR_ERROR',
   UPDATE_USER: 'UPDATE_USER',
+  SET_CONFIG: 'SET_CONFIG',
+  REGISTER_START: 'REGISTER_START',
+  REGISTER_SUCCESS: 'REGISTER_SUCCESS',
+  REGISTER_FAILURE: 'REGISTER_FAILURE',
 };
 
 // Reducer
 const authReducer = (state, action) => {
   switch (action.type) {
     case AUTH_ACTIONS.LOGIN_START:
+    case AUTH_ACTIONS.REGISTER_START:
       return {
         ...state,
         isLoading: true,
@@ -37,28 +41,33 @@ const authReducer = (state, action) => {
       return {
         ...state,
         user: action.payload.user,
-        organization: action.payload.organization,
-        token: action.payload.token,
         isAuthenticated: true,
         isLoading: false,
         error: null,
       };
     
     case AUTH_ACTIONS.LOGIN_FAILURE:
+    case AUTH_ACTIONS.REGISTER_FAILURE:
       return {
         ...state,
         user: null,
-        organization: null,
-        token: null,
         isAuthenticated: false,
         isLoading: false,
         error: action.payload,
+      };
+
+    case AUTH_ACTIONS.REGISTER_SUCCESS:
+      return {
+        ...state,
+        isLoading: false,
+        error: null,
       };
     
     case AUTH_ACTIONS.LOGOUT:
       return {
         ...initialState,
         isLoading: false,
+        authConfig: state.authConfig, // Preserve config
       };
     
     case AUTH_ACTIONS.SET_LOADING:
@@ -78,6 +87,12 @@ const authReducer = (state, action) => {
         ...state,
         user: { ...state.user, ...action.payload },
       };
+
+    case AUTH_ACTIONS.SET_CONFIG:
+      return {
+        ...state,
+        authConfig: action.payload,
+      };
     
     default:
       return state;
@@ -91,31 +106,43 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Initialize auth state from localStorage
+  // Load authentication configuration
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const response = await authAPI.getConfig();
+        dispatch({
+          type: AUTH_ACTIONS.SET_CONFIG,
+          payload: response.data,
+        });
+      } catch (error) {
+        console.error('Failed to load auth config:', error);
+      }
+    };
+
+    loadConfig();
+  }, []);
+
+  // Initialize auth state
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const token = localStorage.getItem('authToken');
-        const user = localStorage.getItem('user');
-        const organization = localStorage.getItem('organization');
+        const token = localStorage.getItem('access_token');
 
-        if (token && user) {
-          // Verify token is still valid
+        if (token) {
+          // Verify token is still valid by getting current user
           try {
-            const currentUser = await authAPI.getCurrentUser();
+            const response = await authAPI.getCurrentUser();
             dispatch({
               type: AUTH_ACTIONS.LOGIN_SUCCESS,
               payload: {
-                user: currentUser,
-                organization: organization ? JSON.parse(organization) : null,
-                token,
+                user: response.data,
               },
             });
           } catch (error) {
             // Token is invalid, clear storage
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('user');
-            localStorage.removeItem('organization');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
             dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
           }
         } else {
@@ -136,18 +163,10 @@ export const AuthProvider = ({ children }) => {
     
     try {
       const response = await authAPI.login(credentials);
-      const { token, user, organization } = response;
-
-      // Store in localStorage
-      localStorage.setItem('authToken', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      if (organization) {
-        localStorage.setItem('organization', JSON.stringify(organization));
-      }
-
+      
       dispatch({
         type: AUTH_ACTIONS.LOGIN_SUCCESS,
-        payload: { user, organization, token },
+        payload: { user: response.user },
       });
 
       return { success: true };
@@ -161,6 +180,30 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Register function
+  const register = async (userData) => {
+    dispatch({ type: AUTH_ACTIONS.REGISTER_START });
+    
+    try {
+      const response = await authAPI.register(userData);
+      
+      dispatch({ type: AUTH_ACTIONS.REGISTER_SUCCESS });
+      
+      return { 
+        success: true, 
+        message: 'Registration successful. Please check your email to verify your account.',
+        data: response.data,
+      };
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      dispatch({
+        type: AUTH_ACTIONS.REGISTER_FAILURE,
+        payload: errorMessage,
+      });
+      return { success: false, error: errorMessage };
+    }
+  };
+
   // Logout function
   const logout = async () => {
     try {
@@ -168,30 +211,23 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Clear localStorage
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
-      localStorage.removeItem('organization');
-      
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
     }
   };
 
-  // Register function
-  const register = async (userData) => {
+  // Social login functions
+  const googleLogin = async (accessToken) => {
     dispatch({ type: AUTH_ACTIONS.LOGIN_START });
     
     try {
-      const response = await authAPI.register(userData);
+      const response = await authAPI.googleLogin(accessToken);
       
-      // Registration successful, but may require approval
-      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
-      
-      return { 
-        success: true, 
-        message: response.message || 'Registration successful. Please wait for approval.',
-        requiresApproval: response.requires_approval || false,
-      };
+      dispatch({
+        type: AUTH_ACTIONS.LOGIN_SUCCESS,
+        payload: { user: response.user },
+      });
+
+      return { success: true };
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       dispatch({
@@ -202,16 +238,116 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Update user function
-  const updateUser = (userData) => {
-    dispatch({
-      type: AUTH_ACTIONS.UPDATE_USER,
-      payload: userData,
-    });
+  const facebookLogin = async (accessToken) => {
+    dispatch({ type: AUTH_ACTIONS.LOGIN_START });
     
-    // Update localStorage
-    const updatedUser = { ...state.user, ...userData };
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+    try {
+      const response = await authAPI.facebookLogin(accessToken);
+      
+      dispatch({
+        type: AUTH_ACTIONS.LOGIN_SUCCESS,
+        payload: { user: response.user },
+      });
+
+      return { success: true };
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      dispatch({
+        type: AUTH_ACTIONS.LOGIN_FAILURE,
+        payload: errorMessage,
+      });
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  const githubLogin = async (accessToken) => {
+    dispatch({ type: AUTH_ACTIONS.LOGIN_START });
+    
+    try {
+      const response = await authAPI.githubLogin(accessToken);
+      
+      dispatch({
+        type: AUTH_ACTIONS.LOGIN_SUCCESS,
+        payload: { user: response.user },
+      });
+
+      return { success: true };
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      dispatch({
+        type: AUTH_ACTIONS.LOGIN_FAILURE,
+        payload: errorMessage,
+      });
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  // Password reset functions
+  const requestPasswordReset = async (email) => {
+    try {
+      await authAPI.requestPasswordReset(email);
+      return { success: true, message: 'Password reset email sent.' };
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  const confirmPasswordReset = async (resetData) => {
+    try {
+      await authAPI.confirmPasswordReset(resetData);
+      return { success: true, message: 'Password reset successful.' };
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  // Email verification functions
+  const verifyEmail = async (key) => {
+    try {
+      await authAPI.verifyEmail(key);
+      return { success: true, message: 'Email verified successfully.' };
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  const resendEmailVerification = async (email) => {
+    try {
+      await authAPI.resendEmailVerification(email);
+      return { success: true, message: 'Verification email sent.' };
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  // Update user function
+  const updateUser = async (userData) => {
+    try {
+      const response = await authAPI.updateUser(userData);
+      dispatch({
+        type: AUTH_ACTIONS.UPDATE_USER,
+        payload: response.data,
+      });
+      return { success: true };
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  // Change password function
+  const changePassword = async (passwordData) => {
+    try {
+      await authAPI.changePassword(passwordData);
+      return { success: true, message: 'Password changed successfully.' };
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      return { success: false, error: errorMessage };
+    }
   };
 
   // Clear error function
@@ -219,43 +355,31 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
   };
 
-  // Check if user has permission
-  const hasPermission = (permission) => {
-    if (!state.user || !state.user.permissions) return false;
-    return state.user.permissions.includes(permission);
-  };
-
-  // Check if user has role
+  // Utility functions
   const hasRole = (role) => {
     if (!state.user) return false;
-    return state.user.role === role;
+    return state.user.user_type_code === role;
   };
 
-  // Check if user can access region
-  const canAccessRegion = (regionId) => {
-    if (!state.user || !state.organization) return false;
-    
-    // Admin users can access all regions
-    if (state.user.role === 'admin') return true;
-    
-    // Check if region is in organization's accessible regions
-    if (state.organization.accessible_regions) {
-      return state.organization.accessible_regions.includes(regionId);
-    }
-    
-    return false;
-  };
+  const isAdmin = () => hasRole('admin');
 
   const value = {
     ...state,
     login,
-    logout,
     register,
+    logout,
+    googleLogin,
+    facebookLogin,
+    githubLogin,
+    requestPasswordReset,
+    confirmPasswordReset,
+    verifyEmail,
+    resendEmailVerification,
     updateUser,
+    changePassword,
     clearError,
-    hasPermission,
     hasRole,
-    canAccessRegion,
+    isAdmin,
   };
 
   return (
@@ -275,4 +399,3 @@ export const useAuth = () => {
 };
 
 export default AuthContext;
-
