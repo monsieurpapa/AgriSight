@@ -11,282 +11,155 @@ On the other hand, SentinelHub was also explored, and the details can be found i
 More details to follow
 
 
-# AgriSight - Satellite-based Agricultural Monitoring Platform
+# AgriSight 🌱
 
-AgriSight is a comprehensive B2B platform that leverages satellite data and advanced analytics to provide real-time agricultural monitoring and insights for humanitarian organizations, cooperatives, and government agencies operating in conflict-affected areas, particularly in the Democratic Republic of Congo (DRC).
+AgriSight is a comprehensive agricultural monitoring and analysis platform that leverages satellite imagery and geospatial data to provide actionable insights for agricultural management. The platform is built with a modern microservices architecture using Django, React, and various geospatial technologies.
 
-## Features
+## 🌟 Features
 
-### Core Capabilities
-- **Multi-resolution Satellite Data Processing**: Utilizes Sentinel-2 satellite imagery for comprehensive crop health and land use monitoring
-- **Advanced Vegetation Indices**: Calculates NDVI, EVI, NDWI, and SAVI for near real-time crop health assessment
-- **Anomaly Detection**: Compares current imagery with historical baselines to identify agricultural decline or land abandonment
-- **Multi-tenancy Support**: Organization-based access control with subscription plans and region-specific permissions
-- **Geospatial Analysis**: Full GeoDjango integration for spatial data handling and analysis
+- **Satellite Data Integration**: Real-time and historical satellite imagery processing
+- **Crop Health Monitoring**: NDVI and other vegetation indices analysis
+- **Field Boundary Detection**: Automated field boundary identification
+- **Anomaly Detection**: Machine learning models for detecting agricultural anomalies
+- **User Authentication**: Secure JWT-based authentication system
+- **Interactive Maps**: Visualize and interact with geospatial data
+- **Task Queueing**: Asynchronous task processing with Celery and Redis
 
-### Platform Architecture
-- **Microservices Architecture**: Docker-based containerized services for scalability and maintainability
-- **Django Backend**: RESTful API with comprehensive data models and business logic
-- **PostgreSQL with PostGIS**: Spatial database for geospatial data storage and queries
-- **Celery Workers**: Asynchronous task processing for satellite data ingestion and analysis
-- **Redis**: Message broker and caching layer
-- **Nginx + HAProxy**: Load balancing and reverse proxy configuration
-- **React Frontend**: Modern web interface for data visualization and management
+## 🏗️ Tech Stack
 
-## Project Structure
+### Backend
+- **Django 4.2** - Python web framework
+- **Django REST Framework** - Building RESTful APIs
+- **PostgreSQL with PostGIS** - Geospatial database
+- **Celery** - Asynchronous task queue
+- **Redis** - Message broker and cache
+- **GDAL/GEOS** - Geospatial data processing
+- **Sentinel Hub** - Satellite imagery processing
 
-```
-agrisight/
-├── backend/                    # Django backend application
-│   ├── agrisight/             # Django project settings
-│   ├── apps/                  # Django applications
-│   │   ├── users/             # User management
-│   │   ├── organizations/     # Organization and subscription management
-│   │   ├── geospatial/        # Spatial data models (regions, satellite images, etc.)
-│   │   ├── analytics/         # Stress events and conflict data
-│   │   ├── reports_alerts/    # Reports and alert system
-│   │   └── api_keys_logs/     # API keys and usage analytics
-│   ├── Dockerfile
-│   └── requirements.txt
-├── celery_worker/             # Celery worker for background tasks
-├── celery_beat/               # Celery beat for scheduled tasks
-├── frontend/                  # React frontend application
-├── nginx/                     # Nginx configuration
-├── haproxy/                   # HAProxy configuration
-├── docker-compose.yml         # Service orchestration
-└── .env                       # Environment variables
-```
+### Frontend
+- **React 18** - Frontend library
+- **Vite** - Build tool and dev server
+- **Tailwind CSS** - Utility-first CSS framework
+- **Radix UI** - Accessible UI components
+- **React Query** - Data fetching and state management
+- **Leaflet** - Interactive maps
+- **Framer Motion** - Animation library
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose
-- Git
 
-### Installation
+- Docker and Docker Compose
+- Python 3.10+
+- Node.js 18+
+- pnpm (recommended) or npm
+
+### Development Setup
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd agrisight
+   git clone https://github.com/yourusername/AgriSight.git
+   cd AgriSight/agrisight
    ```
 
-2. **Environment Setup**
-   ```bash
-   cp .env.example .env
-   # Edit .env file with your configuration
+2. **Set up environment variables**
+   Create a `.env` file in the `backend` directory with the following variables:
+   ```
+   DEBUG=True
+   SECRET_KEY=your-secret-key
+   DB_NAME=agrisight
+   DB_USER=agrisight_user
+   DB_PASSWORD=agrisight_password
+   DB_HOST=postgres
+   CELERY_BROKER_URL=redis://redis:6379/0
+   SENTINEL_HUB_CLIENT_ID=your-client-id
+   SENTINEL_HUB_CLIENT_SECRET=your-client-secret
    ```
 
-3. **Build and Start Services**
+3. **Start the application**
    ```bash
    docker-compose up --build
    ```
 
-4. **Initialize Database**
-   ```bash
-   docker-compose exec backend python manage.py migrate
-   docker-compose exec backend python manage.py createsuperuser
-   ```
+4. **Access the application**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+   - Django Admin: http://localhost:8000/admin
+   - Flower (Celery monitoring): http://localhost:5555
 
-5. **Access the Platform**
-   - Frontend: http://localhost
-   - API Documentation: http://localhost/api/docs/
-   - Admin Interface: http://localhost/admin/
-   - HAProxy Stats: http://localhost:8404/stats
+## 🧪 Running Tests
 
-## API Documentation
-
-The platform provides a comprehensive RESTful API with the following main endpoints:
-
-### Authentication & Users
-- `GET/POST /api/v1/users/` - User management
-- `GET /api/v1/users/me/` - Current user information
-
-### Organizations & Subscriptions
-- `GET/POST /api/v1/organizations/` - Organization management
-- `GET /api/v1/organizations/subscription-plans/` - Available subscription plans
-
-### Geospatial Data
-- `GET/POST /api/v1/geospatial/regions/` - Geographic regions
-- `GET/POST /api/v1/geospatial/satellite-images/` - Satellite imagery metadata
-- `GET/POST /api/v1/geospatial/vegetation-indices/` - Calculated vegetation indices
-- `GET/POST /api/v1/geospatial/crops/` - Crop information
-- `GET/POST /api/v1/geospatial/crop-mappings/` - Crop mapping data
-
-### Analytics
-- `GET/POST /api/v1/analytics/stress-events/` - Agricultural stress events
-- `GET/POST /api/v1/analytics/conflict-events/` - Conflict event data
-- `GET /api/v1/analytics/stress-events/summary/` - Stress event statistics
-
-### Reports & Alerts
-- `GET/POST /api/v1/reports-alerts/reports/` - Generated reports
-- `GET/POST /api/v1/reports-alerts/alerts/` - System alerts
-- `POST /api/v1/reports-alerts/alerts/{id}/mark-read/` - Mark alert as read
-
-### API Keys & Analytics
-- `GET/POST /api/v1/api-keys/` - API key management
-- `GET /api/v1/api-keys/logs/` - Usage analytics
-- `GET /api/v1/api-keys/usage-stats/` - Usage statistics
-
-## Data Models
-
-### Core Models
-
-#### User & Organization Management
-- **User**: Extended Django user model with organization association
-- **Organization**: B2B client organizations with subscription plans
-- **SubscriptionPlan**: Different service tiers with feature limitations
-
-#### Geospatial Data
-- **Region**: Geographic areas with PostGIS geometry fields
-- **RegionAccess**: Organization-specific region access permissions
-- **SatelliteImage**: Satellite imagery metadata and processing status
-- **VegetationIndex**: Calculated indices (NDVI, EVI, NDWI, SAVI)
-- **Crop**: Crop type information and characteristics
-- **CropMapping**: Spatial crop distribution data
-
-#### Analytics & Events
-- **AgriculturalStressEvent**: Detected stress events with severity levels
-- **ConflictEvent**: Conflict data that may impact agriculture
-
-#### Reporting & Alerts
-- **Report**: Generated reports for organizations
-- **Alert**: Automated system alerts and notifications
-
-#### System Management
-- **APIKey**: Programmatic access keys for B2B clients
-- **AnalyticsLog**: Usage tracking and billing data
-
-## Satellite Data Processing
-
-### Vegetation Indices
-The platform calculates four key vegetation indices:
-
-1. **NDVI (Normalized Difference Vegetation Index)**
-   - Range: -1 to 1
-   - Indicates vegetation health and density
-
-2. **EVI (Enhanced Vegetation Index)**
-   - Improved sensitivity in high biomass regions
-   - Reduces atmospheric and soil background effects
-
-3. **NDWI (Normalized Difference Water Index)**
-   - Range: -1 to 1
-   - Indicates water stress and moisture content
-
-4. **SAVI (Soil Adjusted Vegetation Index)**
-   - Minimizes soil brightness influences
-   - Better for sparse vegetation areas
-
-### Anomaly Detection
-The system employs statistical analysis to detect anomalies:
-- Compares current indices with historical baselines
-- Uses standard deviation thresholds for anomaly identification
-- Generates automated alerts for significant deviations
-- Creates stress events with severity classifications (1-5 scale)
-
-## Multi-tenancy & Access Control
-
-### Organization-based Tenancy
-- Each organization operates as an isolated tenant
-- Subscription plans control feature access and limits
-- Region-specific access permissions ensure data security
-
-### Access Levels
-- **View Only**: Read access to data and visualizations
-- **Analysis Access**: Ability to run analytics and generate reports
-- **Full Access**: Complete data management and configuration
-
-## Development
-
-### Backend Development
 ```bash
-# Install dependencies
-cd backend
-pip install -r requirements.txt
-
-# Run migrations
-python manage.py migrate
-
-# Create superuser
-python manage.py createsuperuser
-
-# Run development server
-python manage.py runserver
-```
-
-### Frontend Development
-```bash
-# Install dependencies
-cd frontend
-npm install
-
-# Start development server
-npm start
-```
-
-### Running Tests
-```bash
-# Backend tests
+# Run backend tests
 docker-compose exec backend python manage.py test
 
-# Frontend tests
-docker-compose exec frontend npm test
+# Run frontend tests
+cd frontend
+pnpm test
 ```
 
-## Deployment
+## 🛠️ Project Structure
 
-### Production Deployment
-1. Update environment variables for production
-2. Set `DEBUG=False` in Django settings
-3. Configure proper SSL certificates
-4. Set up monitoring and logging
-5. Configure backup strategies for PostgreSQL
+```
+agrisight/
+├── backend/               # Django backend
+│   ├── agrisight/         # Project settings
+│   ├── apps/              # Django apps
+│   │   ├── api/           # API endpoints
+│   │   ├── fields/        # Field management
+│   │   ├── satellite/     # Satellite data processing
+│   │   └── users/         # User management
+│   └── manage.py          # Django management script
+│
+├── celery_beat/          # Celery beat scheduler
+├── celery_worker/        # Celery worker configuration
+├── frontend/             # React frontend
+│   ├── public/           # Static files
+│   └── src/              # Source code
+│       ├── components/   # Reusable components
+│       ├── contexts/     # React contexts
+│       ├── hooks/        # Custom hooks
+│       ├── pages/        # Page components
+│       ├── services/     # API services
+│       └── utils/        # Utility functions
+│
+├── data/                 # Data storage
+├── docs/                 # Documentation
+└── docker-compose.yml    # Docker Compose configuration
+```
 
-### Scaling Considerations
-- Celery workers can be scaled horizontally
-- Database read replicas for improved performance
-- CDN integration for static file delivery
-- Load balancer configuration for high availability
+## 🔧 Environment Configuration
 
-## Security
+- **Development**: Set `DEBUG=True` for detailed error pages and auto-reload
+- **Production**: Set `DEBUG=False` and configure proper security settings
+- **Testing**: Uses a separate test database
 
-### API Security
-- Token-based authentication
-- API key management for programmatic access
-- Rate limiting and request throttling
-- Input validation and sanitization
-
-### Data Security
-- Encrypted database connections
-- Secure API key storage (hashed)
-- Organization-based data isolation
-- Audit logging for all operations
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support
+## 📚 Documentation
 
-For technical support or questions about the AgriSight platform, please contact:
-- Email: support@agrisight.com
-- Documentation: https://docs.agrisight.com
-- Issue Tracker: https://github.com/agrisight/agrisight/issues
+For detailed documentation, please see:
+- [API Documentation](http://localhost:8000/api/docs/)
+- [Deployment Guide](DEPLOYMENT_GUIDE.md)
+- [Setup Guide](SETUP_GUIDE.md)
+- [Frontend Implementation](FRONTEND_IMPLEMENTATION.md)
 
-## Acknowledgments
+## 📬 Contact
 
-- Sentinel-2 satellite data provided by the European Space Agency (ESA)
-- PostGIS for spatial database capabilities
-- Django and Django REST Framework for backend development
-- React and Leaflet for frontend mapping capabilities
+For questions or support, please open an issue or contact the maintainers.
 
+---
 
+<div align="center">
+  Made with ❤️ by the AgriSight Team
+</div>
