@@ -108,12 +108,8 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
-      backend:
-        condition: service_started
   # Frontend (React)
   frontend:
     build: 
