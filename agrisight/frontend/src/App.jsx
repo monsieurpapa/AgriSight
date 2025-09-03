@@ -99,50 +99,124 @@ function App() {
           <div className="App">
             <Routes>
               {/* Public routes */}
-              <Route
-                path="/login"
-                element={
-                  <PublicRoute>
-                    <Login />
-                  </PublicRoute>
-                }
-              />
+              <Route path="/login" element={
+                <PublicRoute>
+                  <Login />
+                </PublicRoute>
+              } />
+              <Route path="/register" element={
+                <PublicRoute>
+                  <Suspense fallback={<Fallback />}>
+                    <Register />
+                  </Suspense>
+                </PublicRoute>
+              } />
+              <Route path="/forgot-password" element={
+                <PublicRoute>
+                  <Suspense fallback={<Fallback />}>
+                    <ForgotPassword />
+                  </Suspense>
+                </PublicRoute>
+              } />
+              <Route path="/privacy" element={
+                <Suspense fallback={<Fallback />}>
+                  <Privacy />
+                </Suspense>
+              } />
+              <Route path="/terms" element={
+                <Suspense fallback={<Fallback />}>
+                  <Terms />
+                </Suspense>
+              } />
+              <Route path="/support" element={
+                <Suspense fallback={<Fallback />}>
+                  <Support />
+                </Suspense>
+              } />
 
               {/* Protected routes */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<Dashboard />} />
-                <Route path="map" element={<Suspense fallback={<Fallback />}><MapView /></Suspense>} />
-                <Route path="regions" element={<Suspense fallback={<Fallback />}><Regions /></Suspense>} />
-                <Route path="satellite" element={<Suspense fallback={<Fallback />}><SatelliteData /></Suspense>} />
-                <Route path="vegetation" element={<Suspense fallback={<Fallback />}><VegetationIndices /></Suspense>} />
-                <Route path="analytics" element={<Suspense fallback={<Fallback />}><Analytics /></Suspense>} />
-                <Route path="stress-events" element={<Suspense fallback={<Fallback />}><StressEvents /></Suspense>} />
-                <Route path="alerts" element={<Suspense fallback={<Fallback />}><Alerts /></Suspense>} />
-                <Route path="reports" element={<Suspense fallback={<Fallback />}><Reports /></Suspense>} />
-                <Route path="exports" element={<Suspense fallback={<Fallback />}><Exports /></Suspense>} />
-                <Route path="organizations" element={<Suspense fallback={<Fallback />}><Organizations /></Suspense>} />
-                <Route path="admin/settings" element={<Suspense fallback={<Fallback />}><AdminSettings /></Suspense>} />
-                <Route path="admin/performance" element={<Suspense fallback={<Fallback />}><AdminPerformance /></Suspense>} />
-                <Route path="profile" element={<Suspense fallback={<Fallback />}><Profile /></Suspense>} />
-                <Route path="settings" element={<Suspense fallback={<Fallback />}><Settings /></Suspense>} />
+              <Route element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/map" element={
+                  <Suspense fallback={<Fallback />}>
+                    <MapView />
+                  </Suspense>
+                } />
+                <Route path="/regions" element={
+                  <Suspense fallback={<Fallback />}>
+                    <Regions />
+                  </Suspense>
+                } />
+                <Route path="/satellite" element={
+                  <Suspense fallback={<Fallback />}>
+                    <SatelliteData />
+                  </Suspense>
+                } />
+                <Route path="/vegetation" element={
+                  <Suspense fallback={<Fallback />}>
+                    <VegetationIndices />
+                  </Suspense>
+                } />
+                <Route path="/analytics" element={
+                  <Suspense fallback={<Fallback />}>
+                    <Analytics />
+                  </Suspense>
+                } />
+                <Route path="/stress-events" element={
+                  <Suspense fallback={<Fallback />}>
+                    <StressEvents />
+                  </Suspense>
+                } />
+                <Route path="/alerts" element={
+                  <Suspense fallback={<Fallback />}>
+                    <Alerts />
+                  </Suspense>
+                } />
+                <Route path="/reports" element={
+                  <Suspense fallback={<Fallback />}>
+                    <Reports />
+                  </Suspense>
+                } />
+                <Route path="/exports" element={
+                  <Suspense fallback={<Fallback />}>
+                    <Exports />
+                  </Suspense>
+                } />
+                <Route path="/organizations" element={
+                  <Suspense fallback={<Fallback />}>
+                    <Organizations />
+                  </Suspense>
+                } />
+                <Route path="/admin/settings" element={
+                  <Suspense fallback={<Fallback />}>
+                    <AdminSettings />
+                  </Suspense>
+                } />
+                <Route path="/admin/performance" element={
+                  <Suspense fallback={<Fallback />}>
+                    <AdminPerformance />
+                  </Suspense>
+                } />
+                <Route path="/profile" element={
+                  <Suspense fallback={<Fallback />}>
+                    <Profile />
+                  </Suspense>
+                } />
+                <Route path="/settings" element={
+                  <Suspense fallback={<Fallback />}>
+                    <Settings />
+                  </Suspense>
+                } />
               </Route>
 
-              {/* Additional public routes */}
-              <Route path="/register" element={<Suspense fallback={<Fallback />}><Register /></Suspense>} />
-              <Route path="/forgot-password" element={<Suspense fallback={<Fallback />}><ForgotPassword /></Suspense>} />
-              <Route path="/privacy" element={<Suspense fallback={<Fallback />}><Privacy /></Suspense>} />
-              <Route path="/terms" element={<Suspense fallback={<Fallback />}><Terms /></Suspense>} />
-              <Route path="/support" element={<Suspense fallback={<Fallback />}><Support /></Suspense>} />
-
               {/* Catch all route */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={
+                <Navigate to="/" replace />
+              } />
             </Routes>
           </div>
         </Router>
