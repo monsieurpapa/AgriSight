@@ -1,6 +1,55 @@
 # AgriSight Frontend Implementation Guide
 
 ## Overview
+## Public Landing & Demo (MVP)
+
+- Route `/landing`:
+  - Marketing landing page with hero, feature grid, use-cases, pricing CTA, FAQ, and footer links.
+  - Primary CTA: "Try it now" → `/register`. Secondary CTA: "View demo" → `/demo`.
+  - Screenshot strip added, using static assets under `frontend/public/demo/`.
+
+- Route `/demo`:
+  - Read-only public demo.
+  - Loads NDVI sample data from `public/demo/ndvi.json` and renders a line chart with Recharts.
+  - Displays a map preview (`public/demo/map-preview.svg`) to illustrate overlays and AOIs.
+  - No backend/API calls; suitable for unauthenticated exploration.
+
+- Auth gating:
+  - Unauthenticated users are redirected to `/landing` when accessing protected routes.
+  - Authenticated users visiting public routes may be redirected to `/` (Dashboard).
+
+## Routes Overview
+
+- Public: `/landing`, `/demo`, `/login`, `/register`, `/forgot-password`, `/privacy`, `/terms`, `/support`.
+- Protected (behind layout): `/` (Dashboard), `/map`, `/regions`, `/satellite`, `/vegetation`, `/analytics`, `/stress-events`, `/alerts`, `/reports`, `/exports`, `/organizations`, `/admin/settings`, `/admin/performance`, `/profile`, `/settings`.
+
+## Static Assets
+
+Located in `frontend/public/demo/`:
+
+- `ndvi.json`: Sample NDVI time series.
+- `map-preview.svg`: Map UI illustration (legend, AOIs, layers strip).
+- `screenshot-1.svg`: Dashboard mock screenshot.
+- `screenshot-2.svg`: Map mock screenshot.
+
+## Components Updated
+
+- `src/pages/Landing.jsx`:
+  - Adds screenshot strip and CTA wiring to `/register` and `/demo`.
+
+- `src/pages/PublicDemo.jsx`:
+  - Fetches `ndvi.json` and renders a `LineChart` (Recharts).
+  - Shows `map-preview.svg` image.
+
+- `src/App.jsx`:
+  - Adds routes for `/landing` and `/demo`.
+  - Updates unauthenticated redirect to `/landing`.
+
+## MVP Notes
+
+- Social auth buttons in `Login.jsx` are controlled by backend `authConfig.social_providers`. They remain hidden unless enabled.
+- Public demo is intentionally static and offline-friendly; integrate real data later without changing the public contract.
+
 
 This document provides a comprehensive guide to the AgriSight frontend implementation, a professional React-based agricultural monitoring platform designed for humanitarian organizations operating in DRC conflict zones.
 
