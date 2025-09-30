@@ -36,6 +36,7 @@ User = get_user_model()
 
 
 @method_decorator(ratelimit(key='ip', rate='5/15m', method='POST'), name='post')
+@method_decorator(csrf_exempt, name='dispatch')
 class CustomLoginView(BaseLoginView):
     """
     Custom login view with rate limiting.

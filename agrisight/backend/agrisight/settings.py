@@ -45,6 +45,7 @@ THIRD_PARTY_APPS = [
     'dj_rest_auth',
     'dj_rest_auth.registration',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'rest_framework.authtoken',
 ]
 
@@ -165,8 +166,12 @@ REST_FRAMEWORK = {
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Your frontend URL
+    "http://localhost:3000",  # React dev server (alternate)
     "http://127.0.0.1:3000",
+    "http://localhost:5173",  # Vite default dev server
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -185,6 +190,10 @@ CORS_ALLOW_HEADERS = [
 ]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
 # Django Sites Framework

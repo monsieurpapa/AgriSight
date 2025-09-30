@@ -1,4 +1,5 @@
 from django.urls import path, include
+from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     CustomLoginView,
     CustomRegisterView,
@@ -26,6 +27,7 @@ urlpatterns = [
     path('login/', CustomLoginView.as_view(), name='rest_login'),
     path('logout/', CustomLogoutView.as_view(), name='rest_logout'),
     path('user/', CustomUserDetailsView.as_view(), name='rest_user_details'),
+    path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # Registration
     path('registration/', CustomRegisterView.as_view(), name='rest_register'),
