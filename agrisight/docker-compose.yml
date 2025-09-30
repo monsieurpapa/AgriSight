@@ -118,7 +118,7 @@ services:
     ports:
       - "3000:80"
     environment:
-      - VITE_API_URL=http://localhost/api
+      - VITE_API_URL=http://backend:8000
     depends_on:
       - backend
     healthcheck:
