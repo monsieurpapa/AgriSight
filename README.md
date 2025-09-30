@@ -45,6 +45,12 @@ AgriSight is a comprehensive agricultural monitoring and analysis platform that 
 - **Leaflet** - Interactive maps
 - **Framer Motion** - Animation library
 
+#### Public landing and demo
+
+- Visit `/landing` for the marketing landing page with CTAs to register and view the public demo.
+- Visit `/demo` for a read-only demo with a sample NDVI chart and a map preview. Demo data is static and loaded from `frontend/public/demo/`.
+- Unauthenticated users navigating to protected routes are redirected to `/landing`.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
