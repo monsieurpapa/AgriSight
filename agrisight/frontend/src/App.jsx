@@ -5,6 +5,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
+import Landing from './pages/Landing';
+import PublicDemo from './pages/PublicDemo';
 const MapView = lazy(() => import('./pages/MapView'));
 const Regions = lazy(() => import('./pages/Regions'));
 const SatelliteData = lazy(() => import('./pages/SatelliteData'));
@@ -52,7 +54,7 @@ const ProtectedRoute = ({ children }) => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/landing" replace />;
   }
 
   return children;
@@ -98,7 +100,9 @@ function App() {
         <Router>
           <div className="App">
             <Routes>
-              {/* Public routes */}
+            {/* Public routes */}
+            <Route path="/landing" element={<Landing />} />
+            <Route path="/demo" element={<PublicDemo />} />
               <Route path="/login" element={
                 <PublicRoute>
                   <Login />
@@ -215,7 +219,7 @@ function App() {
 
               {/* Catch all route */}
               <Route path="*" element={
-                <Navigate to="/" replace />
+                <Navigate to="/landing" replace />
               } />
             </Routes>
           </div>

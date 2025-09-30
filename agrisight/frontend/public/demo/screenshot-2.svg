@@ -1,0 +1,8 @@
+<svg width="900" height="560" viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Map screenshot">
+  <rect width="100%" height="100%" rx="16" fill="#0b1220"/>
+  <rect x="24" y="24" width="852" height="60" rx="10" fill="#111827"/>
+  <rect x="24" y="104" width="852" height="432" rx="12" fill="#111827"/>
+  <text x="50%" y="62" dominant-baseline="middle" text-anchor="middle" font-family="Inter,system-ui" font-size="16" fill="#d1d5db">AgriSight • Map</text>
+</svg>
+
+

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { authAPI } from '../lib/authAPI';
 import { getErrorMessage } from '../lib/utils';
 
@@ -71,12 +71,14 @@ const authReducer = (state, action) => {
       };
     
     case AUTH_ACTIONS.SET_LOADING:
+      if (state.isLoading === action.payload) return state;
       return {
         ...state,
         isLoading: action.payload,
       };
     
     case AUTH_ACTIONS.CLEAR_ERROR:
+      if (state.error == null) return state;
       return {
         ...state,
         error: null,
@@ -128,8 +130,9 @@ export const AuthProvider = ({ children }) => {
     const initializeAuth = async () => {
       try {
         const token = localStorage.getItem('access_token');
+        const refresh = localStorage.getItem('refresh_token');
 
-        if (token) {
+        if (token || refresh) {
           // Verify token is still valid by getting current user
           try {
             const response = await authAPI.getCurrentUser();

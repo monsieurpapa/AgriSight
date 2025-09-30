@@ -1,0 +1,29 @@
+<svg width="1200" height="750" viewBox="0 0 1200 750" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Map preview">
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#dbeafe"/>
+      <stop offset="50%" stop-color="#bbf7d0"/>
+      <stop offset="100%" stop-color="#fde68a"/>
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#g1)"/>
+  <g opacity="0.35">
+    <circle cx="300" cy="200" r="140" fill="#16a34a"/>
+    <circle cx="520" cy="340" r="110" fill="#22c55e"/>
+    <circle cx="740" cy="280" r="150" fill="#84cc16"/>
+    <circle cx="940" cy="420" r="120" fill="#eab308"/>
+  </g>
+  <rect x="120" y="80" width="960" height="590" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-dasharray="6 6"/>
+  <g>
+    <rect x="60" y="650" width="1080" height="40" rx="8" fill="#111827"/>
+    <text x="600" y="675" text-anchor="middle" font-family="Inter,system-ui" font-size="16" fill="#e5e7eb">NDVI • EVI • NDWI • SAVI • AOI • Layers</text>
+  </g>
+  <g>
+    <rect x="140" y="110" width="160" height="90" rx="10" fill="#111827" opacity="0.85"/>
+    <text x="220" y="160" text-anchor="middle" font-family="Inter,system-ui" font-size="14" fill="#e5e7eb">Legend</text>
+    <circle cx="160" cy="180" r="6" fill="#16a34a"/>
+    <text x="175" y="184" font-family="Inter,system-ui" font-size="12" fill="#e5e7eb">NDVI high</text>
+  </g>
+</svg>
+
+

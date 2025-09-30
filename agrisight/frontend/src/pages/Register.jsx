@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+// Replaced Radix Select with native <select> for stability during MVP
 import { useAuth } from '../contexts/AuthContext';
 
 const Register = () => {
@@ -26,14 +26,6 @@ const Register = () => {
   
   const { register, isAuthenticated, error, clearError } = useAuth();
   const navigate = useNavigate();
-
-    // Add error boundary
-  const [hasError, setHasError] = useState(false);
-
-  if (hasError) {
-    return <div>Something went wrong. Please try again later.</div>;
-  }
-
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -140,8 +132,7 @@ const Register = () => {
       </div>
     );
   }
-  try {
-    return (
+  return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
@@ -209,17 +200,20 @@ const Register = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="user_type">Account Type</Label>
-                <Select onValueChange={handleSelectChange} disabled={isLoading}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select account type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="humanitarian">Humanitarian Organization</SelectItem>
-                    <SelectItem value="cooperative">Agricultural Cooperative</SelectItem>
-                    <SelectItem value="government">Government Agency</SelectItem>
-                    <SelectItem value="researcher">Researcher</SelectItem>
-                  </SelectContent>
-                </Select>
+                <select
+                  id="user_type"
+                  name="user_type"
+                  value={formData.user_type}
+                  onChange={(e) => handleSelectChange(e.target.value)}
+                  disabled={isLoading}
+                  className="border-input focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50 flex w-full items-center rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="" disabled>Select account type</option>
+                  <option value="humanitarian">Humanitarian Organization</option>
+                  <option value="cooperative">Agricultural Cooperative</option>
+                  <option value="government">Government Agency</option>
+                  <option value="researcher">Researcher</option>
+                </select>
               </div>
 
               <div className="space-y-2">
@@ -339,11 +333,6 @@ const Register = () => {
         </Card>
       </div>
     );
-    } catch (error) {
-      console.error('Error in Register component:', error);
-      setHasError(true);
-      return null;
-    }
 };
 
 export default Register;
