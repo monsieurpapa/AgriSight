@@ -35,7 +35,6 @@ from .serializers import (
 User = get_user_model()
 
 
-@method_decorator(ratelimit(key='ip', rate='5/15m', method='POST'), name='post')
 @method_decorator(csrf_exempt, name='dispatch')
 class CustomLoginView(BaseLoginView):
     """
@@ -86,6 +85,7 @@ class CustomUserDetailsView(BaseUserDetailsView):
     Custom user details view with extended serializer.
     """
     serializer_class = CustomUserDetailsSerializer
+    permission_classes = [IsAuthenticated]
 
 
 @method_decorator(ratelimit(key='ip', rate='3/1h', method='POST'), name='post')
@@ -196,7 +196,7 @@ def auth_config(request):
                 'name': 'GitHub'
             }
         },
-        'email_verification_required': True,
+        'email_verification_required': False,  # Updated to match settings
         'password_requirements': {
             'min_length': 8,
             'require_uppercase': False,
@@ -204,6 +204,18 @@ def auth_config(request):
             'require_numbers': False,
             'require_symbols': False
         }
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_csrf_token(request):
+    """
+    Get CSRF token for frontend.
+    """
+    from django.middleware.csrf import get_token
+    return Response({
+        'csrfToken': get_token(request)
     })
 
 

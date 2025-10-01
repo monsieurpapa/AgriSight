@@ -1,96 +1,60 @@
 import axios from 'axios';
 
 // Align with Vite env naming and allow fallback in Docker
+// Backend serves auth at /api/auth/ so base URL should not include /api
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-// Axios instance
+// Debug: Log the resolved API base URL
+console.log('AuthAPI - Resolved API_BASE_URL:', API_BASE_URL);
+
+// Axios instance for session-based authentication
 const http = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: false,
+  withCredentials: true,  // Enable cookies for session authentication
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Access token handling
-let accessToken = localStorage.getItem('access_token') || null;
-let isRefreshing = false;
-let refreshQueue = [];
+// CSRF token handling for session authentication
+let csrfToken = null;
 
-const setAccessToken = (token) => {
-  accessToken = token;
-  if (token) {
-    localStorage.setItem('access_token', token);
-  } else {
-    localStorage.removeItem('access_token');
+const getCsrfToken = async () => {
+  if (!csrfToken) {
+    try {
+      const response = await http.get('/api/auth/csrf/');
+      csrfToken = response.data.csrfToken;
+    } catch (error) {
+      console.error('Failed to get CSRF token:', error);
+    }
   }
+  return csrfToken;
 };
 
-const setRefreshToken = (token) => {
-  if (token) {
-    localStorage.setItem('refresh_token', token);
-  } else {
-    localStorage.removeItem('refresh_token');
-  }
-};
-
-// Attach Authorization header
+// Simplified request interceptor - no async operations
 http.interceptors.request.use((config) => {
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
+  // Skip CSRF for GET requests and CSRF endpoint itself
+  if (config.method !== 'get' && !config.url.includes('/csrf/') && csrfToken) {
+    config.headers['X-CSRFToken'] = csrfToken;
   }
   return config;
 });
 
-// Handle 401s and try refresh
+// Handle CSRF token refresh on 403 responses
 http.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-
-    if (error.response && error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          refreshQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            return http(originalRequest);
-          })
-          .catch((err) => Promise.reject(err));
-      }
-
-      isRefreshing = true;
-      try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (!refreshToken) throw new Error('No refresh token');
-
-        const resp = await axios.post(
-          `${API_BASE_URL}/api/auth/refresh/`,
-          { refresh: refreshToken },
-          { withCredentials: true }
-        );
-
-        const newAccess = resp.data.access;
-        const newRefresh = resp.data.refresh || refreshToken;
-        setAccessToken(newAccess);
-        setRefreshToken(newRefresh);
-
-        refreshQueue.forEach((p) => p.resolve(newAccess));
-        refreshQueue = [];
-
-        originalRequest.headers.Authorization = `Bearer ${newAccess}`;
-        return http(originalRequest);
-      } catch (refreshErr) {
-        refreshQueue.forEach((p) => p.reject(refreshErr));
-        refreshQueue = [];
-        setAccessToken(null);
-        setRefreshToken(null);
-        return Promise.reject(refreshErr);
-      } finally {
-        isRefreshing = false;
+    if (error.response?.status === 403 && error.response?.data?.detail?.includes('CSRF')) {
+      // Clear cached CSRF token and retry
+      csrfToken = null;
+      const originalRequest = error.config;
+      if (!originalRequest._retry) {
+        originalRequest._retry = true;
+        const token = await getCsrfToken();
+        if (token) {
+          originalRequest.headers['X-CSRFToken'] = token;
+          return http(originalRequest);
+        }
       }
     }
     return Promise.reject(error);
@@ -98,23 +62,27 @@ http.interceptors.response.use(
 );
 
 export const authAPI = {
-  getConfig() {
+  async getConfig() {
     return http.get('/api/auth/config/');
   },
   async login({ email, password }) {
+    console.log('Login request to:', `${API_BASE_URL}/api/auth/login/`);
+    
+    // Ensure we have a CSRF token before making the request
+    if (!csrfToken) {
+      await getCsrfToken();
+    }
+    
     const resp = await http.post('/api/auth/login/', { email, password });
-    const { access, refresh } = resp.data || {};
-    if (access) setAccessToken(access);
-    if (refresh) setRefreshToken(refresh);
-
-    // Prefer server-provided user payload; otherwise fetch current user
+    
+    // For session authentication, the response should contain user data
     let user = resp.data?.user;
     if (!user) {
       try {
         const me = await http.get('/api/auth/user/');
         user = me.data;
       } catch (e) {
-        // swallow; caller will handle error reporting
+        console.error('Failed to fetch user after login:', e);
       }
     }
     return { user };
@@ -122,9 +90,8 @@ export const authAPI = {
   async logout() {
     try {
       await http.post('/api/auth/logout/');
-    } finally {
-      setAccessToken(null);
-      setRefreshToken(null);
+    } catch (e) {
+      console.error('Logout error:', e);
     }
   },
   async register(payload) {
@@ -134,7 +101,7 @@ export const authAPI = {
     return http.get('/api/auth/user/');
   },
   updateUser(data) {
-    return http.put('/api/auth/user/', data);
+    return http.patch('/api/auth/user/', data);
   },
   changePassword(data) {
     return http.post('/api/auth/password/change/', data);
@@ -153,27 +120,19 @@ export const authAPI = {
   },
   async googleLogin(accessToken) {
     const resp = await http.post('/api/auth/google/', { access_token: accessToken });
-    const { access, refresh, user } = resp.data;
-    if (access) setAccessToken(access);
-    if (refresh) setRefreshToken(refresh);
+    const { user } = resp.data;
     return { user };
   },
   async facebookLogin(accessToken) {
     const resp = await http.post('/api/auth/facebook/', { access_token: accessToken });
-    const { access, refresh, user } = resp.data;
-    if (access) setAccessToken(access);
-    if (refresh) setRefreshToken(refresh);
+    const { user } = resp.data;
     return { user };
   },
   async githubLogin(accessToken) {
     const resp = await http.post('/api/auth/github/', { access_token: accessToken });
-    const { access, refresh, user } = resp.data;
-    if (access) setAccessToken(access);
-    if (refresh) setRefreshToken(refresh);
+    const { user } = resp.data;
     return { user };
   },
 };
 
 export default authAPI;
-
-

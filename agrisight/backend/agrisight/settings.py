@@ -147,9 +147,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'dj_rest_auth.jwt_auth.JWTCookieAuthentication',
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -175,6 +174,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for development
 
 # Make sure these are also set
 CORS_ALLOW_HEADERS = [
@@ -206,7 +206,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
+ACCOUNT_EMAIL_VERIFICATION = 'none'  # Disable email verification for simplicity
 ACCOUNT_AUTHENTICATION_METHOD = 'email'
 ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
@@ -216,9 +216,9 @@ ACCOUNT_CONFIRM_EMAIL_ON_GET = True
 ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 3
 ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
 ACCOUNT_LOGOUT_ON_GET = True
-ACCOUNT_SESSION_REMEMBER = None
+ACCOUNT_SESSION_REMEMBER = True  # Remember user sessions
 ACCOUNT_SIGNUP_PASSWORD_ENTER_TWICE = False
-ACCOUNT_LOGIN_ATTEMPTS_LIMIT = 5
+ACCOUNT_LOGIN_ATTEMPTS_LIMIT = 10  # Increase limit
 ACCOUNT_LOGIN_ATTEMPTS_TIMEOUT = 300  # 5 minutes
 
 # Social Account Configuration
@@ -269,12 +269,9 @@ SIMPLE_JWT = {
 }
 
 # dj-rest-auth Configuration
-REST_USE_JWT = True
-JWT_AUTH_COOKIE = 'agrisight-auth'
-JWT_AUTH_REFRESH_COOKIE = 'agrisight-refresh-token'
-JWT_AUTH_SECURE = not DEBUG  # Use secure cookies in production
-JWT_AUTH_HTTPONLY = True
-JWT_AUTH_SAMESITE = 'Lax'
+REST_USE_JWT = False  # Disable JWT, use session authentication
+REST_AUTH_TOKEN_MODEL = None  # Disable the default token model
+REST_SESSION_LOGIN = True  # Enable session-based login
 
 # Email Configuration (for development - use console backend)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

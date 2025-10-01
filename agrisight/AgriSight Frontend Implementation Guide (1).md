@@ -244,14 +244,14 @@ CMD ["nginx", "-g", "daemon off;"]
 
 #### Development (`.env`)
 ```bash
-VITE_API_URL=http://localhost:8000/api
+VITE_API_URL=http://localhost:8000
 VITE_APP_NAME=AgriSight
 VITE_DEBUG=true
 ```
 
 #### Production
 ```bash
-VITE_API_URL=https://api.agrisight.org/api
+VITE_API_URL=https://api.agrisight.org
 VITE_APP_NAME=AgriSight
 VITE_DEBUG=false
 ```

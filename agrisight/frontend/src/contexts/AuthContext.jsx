@@ -129,35 +129,29 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const token = localStorage.getItem('access_token');
-        const refresh = localStorage.getItem('refresh_token');
-
-        if (token || refresh) {
-          // Verify token is still valid by getting current user
-          try {
-            const response = await authAPI.getCurrentUser();
-            dispatch({
-              type: AUTH_ACTIONS.LOGIN_SUCCESS,
-              payload: {
-                user: response.data,
-              },
-            });
-          } catch (error) {
-            // Token is invalid, clear storage
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
-          }
-        } else {
-          dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
-        }
+        // For session authentication, check if user is authenticated by calling the user endpoint
+        const response = await authAPI.getCurrentUser();
+        dispatch({
+          type: AUTH_ACTIONS.LOGIN_SUCCESS,
+          payload: {
+            user: response.data,
+          },
+        });
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        // User is not authenticated - this is normal for unauthenticated users
+        console.log('User not authenticated:', error.message);
         dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
       }
     };
 
-    initializeAuth();
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
+    }, 5000); // 5 second timeout
+
+    initializeAuth().finally(() => {
+      clearTimeout(timeoutId);
+    });
   }, []);
 
   // Login function

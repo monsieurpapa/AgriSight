@@ -16,12 +16,14 @@ from .views import (
     auth_status,
     request_account_deletion,
     auth_config,
+    get_csrf_token,
 )
 
 urlpatterns = [
     # Authentication status and config
     path('status/', auth_status, name='auth_status'),
     path('config/', auth_config, name='auth_config'),
+    path('csrf/', get_csrf_token, name='get_csrf_token'),
     
     # Core authentication
     path('login/', CustomLoginView.as_view(), name='rest_login'),
