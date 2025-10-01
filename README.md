@@ -21,9 +21,13 @@ AgriSight is a comprehensive agricultural monitoring and analysis platform that 
 - **Crop Health Monitoring**: NDVI and other vegetation indices analysis
 - **Field Boundary Detection**: Automated field boundary identification
 - **Anomaly Detection**: Machine learning models for detecting agricultural anomalies
-- **User Authentication**: Secure JWT-based authentication system
+- **Session-Based Authentication**: Secure session-based authentication system with CSRF protection
 - **Interactive Maps**: Visualize and interact with geospatial data
 - **Task Queueing**: Asynchronous task processing with Celery and Redis
+- **Public Landing Page**: Marketing landing page with CTAs and product showcase
+- **Public Demo**: Read-only demo with sample NDVI charts and map previews
+- **User Profile Management**: Complete user profile editing and password management
+- **Protected Routes**: Secure route protection with automatic redirects
 
 ## 🏗️ Tech Stack
 
@@ -35,6 +39,9 @@ AgriSight is a comprehensive agricultural monitoring and analysis platform that 
 - **Redis** - Message broker and cache
 - **GDAL/GEOS** - Geospatial data processing
 - **Sentinel Hub** - Satellite imagery processing
+- **django-allauth** - Authentication and account management
+- **dj-rest-auth** - REST API authentication endpoints
+- **Session Authentication** - Secure session-based authentication
 
 ### Frontend
 - **React 18** - Frontend library
@@ -44,12 +51,25 @@ AgriSight is a comprehensive agricultural monitoring and analysis platform that 
 - **React Query** - Data fetching and state management
 - **Leaflet** - Interactive maps
 - **Framer Motion** - Animation library
+- **React Router** - Client-side routing
+- **Axios** - HTTP client with CSRF support
+- **Recharts** - Data visualization for charts
 
 #### Public landing and demo
 
 - Visit `/landing` for the marketing landing page with CTAs to register and view the public demo.
 - Visit `/demo` for a read-only demo with a sample NDVI chart and a map preview. Demo data is static and loaded from `frontend/public/demo/`.
 - Unauthenticated users navigating to protected routes are redirected to `/landing`.
+
+#### Authentication system
+
+- **Session-based authentication** with CSRF protection
+- **User registration** with email verification (configurable)
+- **Login/logout** functionality with secure session management
+- **User profile management** with editable personal information
+- **Password change** functionality
+- **Protected routes** with automatic redirects for unauthenticated users
+- **Public routes** for landing page, demo, and authentication pages
 
 ## 🚀 Quick Start
 
@@ -81,6 +101,8 @@ AgriSight is a comprehensive agricultural monitoring and analysis platform that 
    SENTINEL_HUB_CLIENT_ID=your-client-id
    SENTINEL_HUB_CLIENT_SECRET=your-client-secret
    ```
+   
+   The frontend automatically uses `http://localhost:8000` as the API base URL in development.
 
 3. **Start the application**
    ```bash
@@ -89,9 +111,16 @@ AgriSight is a comprehensive agricultural monitoring and analysis platform that 
 
 4. **Access the application**
    - Frontend: http://localhost:3000
+   - Landing Page: http://localhost:3000/landing
+   - Public Demo: http://localhost:3000/demo
    - Backend API: http://localhost:8000
    - Django Admin: http://localhost:8000/admin
    - Flower (Celery monitoring): http://localhost:5555
+
+5. **Create your first user account**
+   - Visit http://localhost:3000/register to create a new account
+   - Or visit http://localhost:3000/login to sign in
+   - Access the dashboard at http://localhost:3000/ after authentication
 
 ## 🧪 Running Tests
 
@@ -111,6 +140,7 @@ agrisight/
 ├── backend/               # Django backend
 │   ├── agrisight/         # Project settings
 │   ├── apps/              # Django apps
+│   │   ├── authentication/ # Authentication and user management
 │   │   ├── api/           # API endpoints
 │   │   ├── fields/        # Field management
 │   │   ├── satellite/     # Satellite data processing
@@ -121,12 +151,14 @@ agrisight/
 ├── celery_worker/        # Celery worker configuration
 ├── frontend/             # React frontend
 │   ├── public/           # Static files
+│   │   └── demo/         # Demo data (NDVI charts, map previews)
 │   └── src/              # Source code
 │       ├── components/   # Reusable components
-│       ├── contexts/     # React contexts
+│       │   └── ui/       # UI component library
+│       ├── contexts/     # React contexts (AuthContext)
 │       ├── hooks/        # Custom hooks
+│       ├── lib/          # Utility libraries (API, auth, utils)
 │       ├── pages/        # Page components
-│       ├── services/     # API services
 │       └── utils/        # Utility functions
 │
 ├── data/                 # Data storage
@@ -139,6 +171,13 @@ agrisight/
 - **Development**: Set `DEBUG=True` for detailed error pages and auto-reload
 - **Production**: Set `DEBUG=False` and configure proper security settings
 - **Testing**: Uses a separate test database
+
+### Authentication Configuration
+
+- **Session-based authentication** with CSRF protection enabled
+- **Email verification** can be disabled for development (`ACCOUNT_EMAIL_VERIFICATION = 'none'`)
+- **CORS settings** configured for development with credentials support
+- **CSRF tokens** automatically handled by frontend interceptors
 
 ## 🤝 Contributing
 
@@ -159,6 +198,36 @@ For detailed documentation, please see:
 - [Deployment Guide](DEPLOYMENT_GUIDE.md)
 - [Setup Guide](SETUP_GUIDE.md)
 - [Frontend Implementation](FRONTEND_IMPLEMENTATION.md)
+- [Authentication Architecture](AUTHENTICATION_ARCHITECTURE.md)
+- [Sentinel Hub Integration](SENTINEL_HUB_INTEGRATION.md)
+
+## 🔐 Security Features
+
+- **CSRF Protection**: All state-changing requests protected with CSRF tokens
+- **Session Security**: HTTP-only cookies with secure session management
+- **CORS Configuration**: Properly configured for development and production
+- **Input Validation**: Server-side validation for all user inputs
+- **Authentication**: Secure session-based authentication system
+
+## 🚀 Recent Updates
+
+### Authentication System Overhaul
+- Migrated from JWT to session-based authentication for better security
+- Implemented CSRF protection for all API requests
+- Added comprehensive user profile management
+- Created public landing page and demo functionality
+
+### Frontend Enhancements
+- Added public landing page with marketing content
+- Implemented public demo with sample NDVI charts
+- Created user profile management interface
+- Enhanced route protection and navigation
+
+### Backend Improvements
+- Simplified authentication flow with session management
+- Added CSRF token endpoint for frontend integration
+- Improved error handling and logging
+- Enhanced API documentation and testing
 
 ## 📬 Contact
 
