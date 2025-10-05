@@ -37,6 +37,7 @@ COPY backend /app/
 
 # Copy worker-specific files
 COPY celery_worker/tasks.py /app/
+COPY celery_worker/tasks_sentinel_hub.py /app/
 
 # Run Celery worker
 CMD ["celery", "-A", "agrisight.celery", "worker", "--loglevel=info", "--concurrency=2"]

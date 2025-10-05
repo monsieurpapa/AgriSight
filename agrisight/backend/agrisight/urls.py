@@ -22,6 +22,8 @@ urlpatterns = [
     path('api/v1/analytics/', include('apps.analytics.urls')),
     path('api/v1/reports-alerts/', include('apps.reports_alerts.urls')),
     path('api/v1/api-keys/', include('apps.api_keys_logs.urls')),
+    path('api/v1/satellite-processing/', include('apps.satellite_processing.urls')),
+    path('api/v1/ml-models/', include('apps.ml_models.urls')),
     
     # API documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

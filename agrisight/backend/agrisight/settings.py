@@ -50,6 +50,7 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    'apps.core',
     'apps.users',
     'apps.organizations',
     'apps.geospatial',
@@ -57,6 +58,8 @@ LOCAL_APPS = [
     'apps.reports_alerts',
     'apps.api_keys_logs',
     'apps.sentinel_hub',
+    'apps.satellite_processing',
+    'apps.ml_models',
     'apps.authentication',
 ]
 
@@ -66,6 +69,12 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'apps.core.middleware.HealthCheckMiddleware',
+    'apps.core.middleware.RequestLoggingMiddleware',
+    'apps.core.middleware.ErrorHandlingMiddleware',
+    'apps.core.middleware.SecurityHeadersMiddleware',
+    'apps.core.middleware.RateLimitMiddleware',
+    'apps.core.middleware.APIVersionMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
