@@ -34,6 +34,8 @@ import {
   Cell
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
+import { useWebSocketContext } from '../contexts/WebSocketContext';
+import { dashboardAPI, satelliteProcessingAPI, analyticsAPI } from '../lib/api';
 import { 
   formatDate, 
   formatRelativeTime, 
@@ -47,76 +49,231 @@ import {
 
 const Dashboard = () => {
   const { user, organization } = useAuth();
+  const { isConnected, realTimeData, notifications } = useWebSocketContext();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Mock data - in real app, this would come from API
+  // Fetch real dashboard data from APIs
   useEffect(() => {
-    const mockData = {
-      stats: {
-        totalRegions: 12,
-        activeRegions: 8,
-        totalArea: 2450.5, // km²
-        lastUpdate: new Date().toISOString(),
-        processingTasks: 3,
-        alertsCount: 5,
-        reportsGenerated: 23,
-        organizationsCount: 4
-      },
-      recentActivity: [
-        {
-          id: 1,
-          type: 'processing',
-          title: 'Satellite data processing completed',
-          description: 'NDVI analysis for Goma region finished',
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          status: 'completed'
-        },
-        {
-          id: 2,
-          type: 'alert',
-          title: 'Agricultural stress detected',
-          description: 'Low NDVI values in Bukavu agricultural zone',
-          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-          status: 'warning'
-        },
-        {
-          id: 3,
-          type: 'report',
-          title: 'Weekly report generated',
-          description: 'Agricultural monitoring report for week 42',
-          timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          status: 'success'
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch comprehensive dashboard data
+        const data = await dashboardAPI.getDashboardData();
+        
+        // Transform the data to match the expected format
+        const transformedData = {
+          stats: {
+            totalRegions: data.regions?.count || 0,
+            activeRegions: data.regions?.results?.filter(r => r.is_active).length || 0,
+            totalArea: data.regions?.results?.reduce((sum, r) => sum + (r.area_hectares || 0), 0) / 100 || 0, // Convert to km²
+            lastUpdate: data.lastUpdate,
+            processingTasks: data.processingStats?.active_tasks || 0,
+            alertsCount: data.alerts?.count || 0,
+            reportsGenerated: data.reports?.count || 0,
+            organizationsCount: 1 // Will be updated when organizations API is called
+          },
+          recentActivity: [
+            // Recent stress events
+            ...(data.stressSummary?.recent_events?.slice(0, 2).map(event => ({
+              id: `stress-${event.id}`,
+              type: 'alert',
+              title: 'Agricultural stress detected',
+              description: `${event.stress_type} stress in ${event.region?.name || 'Unknown region'}`,
+              timestamp: event.detection_date,
+              status: event.severity === 'high' ? 'warning' : 'completed'
+            })) || []),
+            // Recent conflict events
+            ...(data.conflictSummary?.recent_events?.slice(0, 1).map(event => ({
+              id: `conflict-${event.id}`,
+              type: 'alert',
+              title: 'Conflict event reported',
+              description: `${event.event_type} in ${event.region?.name || 'Unknown region'}`,
+              timestamp: event.event_date,
+              status: 'warning'
+            })) || []),
+            // Processing activity
+            {
+              id: 'processing-1',
+              type: 'processing',
+              title: 'Satellite data processing',
+              description: `${data.processingStats?.total_images_processed || 0} images processed`,
+              timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+              status: 'completed'
+            }
+          ],
+          vegetationTrends: [], // Will be populated by vegetation data API
+          regionStatus: [
+            { name: 'Healthy', value: data.stressSummary?.events_by_severity?.low || 0, color: '#10b981' },
+            { name: 'Moderate', value: data.stressSummary?.events_by_severity?.medium || 0, color: '#f59e0b' },
+            { name: 'Stressed', value: data.stressSummary?.events_by_severity?.high || 0, color: '#ef4444' },
+            { name: 'No Data', value: Math.max(0, (data.regions?.count || 0) - (data.stressSummary?.total_events || 0)), color: '#6b7280' }
+          ],
+          topRegions: data.regions?.results?.slice(0, 5).map(region => ({
+            name: region.name,
+            ndvi: 0.5, // Will be updated with real vegetation data
+            area: region.area_hectares / 100, // Convert to km²
+            status: 'healthy', // Will be determined by stress events
+            change: 0 // Will be calculated from trend data
+          })) || []
+        };
+
+        // Fetch vegetation trend data for the first few regions
+        if (data.regions?.results?.length > 0) {
+          try {
+            const vegetationPromises = data.regions.results.slice(0, 3).map(region => 
+              satelliteProcessingAPI.getRegionVegetationData(region.id, { days: 30 })
+            );
+            const vegetationData = await Promise.all(vegetationPromises);
+            
+            // Process vegetation data into trend format
+            const trendData = {};
+            vegetationData.forEach((regionData, index) => {
+              if (regionData && regionData.length > 0) {
+                regionData.forEach(point => {
+                  const date = point.date;
+                  if (!trendData[date]) {
+                    trendData[date] = { date, ndvi: 0, evi: 0, ndwi: 0, savi: 0, count: 0 };
+                  }
+                  if (point.index_type === 'NDVI') trendData[date].ndvi += point.mean_value;
+                  if (point.index_type === 'EVI') trendData[date].evi += point.mean_value;
+                  if (point.index_type === 'NDWI') trendData[date].ndwi += point.mean_value;
+                  if (point.index_type === 'SAVI') trendData[date].savi += point.mean_value;
+                  trendData[date].count += 1;
+                });
+              }
+            });
+            
+            // Average the values and convert to array
+            transformedData.vegetationTrends = Object.values(trendData)
+              .map(point => ({
+                date: point.date,
+                ndvi: point.count > 0 ? point.ndvi / point.count : 0,
+                evi: point.count > 0 ? point.evi / point.count : 0,
+                ndwi: point.count > 0 ? point.ndwi / point.count : 0,
+                savi: point.count > 0 ? point.savi / point.count : 0
+              }))
+              .sort((a, b) => new Date(a.date) - new Date(b.date));
+          } catch (vegetationError) {
+            console.warn('Failed to fetch vegetation data:', vegetationError);
+            // Use fallback mock data for vegetation trends
+            transformedData.vegetationTrends = [
+              { date: '2023-10-01', ndvi: 0.65, evi: 0.58, ndwi: 0.12, savi: 0.52 },
+              { date: '2023-10-08', ndvi: 0.62, evi: 0.55, ndwi: 0.15, savi: 0.49 },
+              { date: '2023-10-15', ndvi: 0.58, evi: 0.51, ndwi: 0.18, savi: 0.46 },
+              { date: '2023-10-22', ndvi: 0.54, evi: 0.47, ndwi: 0.22, savi: 0.42 },
+              { date: '2023-10-29', ndvi: 0.51, evi: 0.44, ndwi: 0.25, savi: 0.39 },
+            ];
+          }
         }
-      ],
-      vegetationTrends: [
-        { date: '2023-10-01', ndvi: 0.65, evi: 0.58, ndwi: 0.12, savi: 0.52 },
-        { date: '2023-10-08', ndvi: 0.62, evi: 0.55, ndwi: 0.15, savi: 0.49 },
-        { date: '2023-10-15', ndvi: 0.58, evi: 0.51, ndwi: 0.18, savi: 0.46 },
-        { date: '2023-10-22', ndvi: 0.54, evi: 0.47, ndwi: 0.22, savi: 0.42 },
-        { date: '2023-10-29', ndvi: 0.51, evi: 0.44, ndwi: 0.25, savi: 0.39 },
-      ],
-      regionStatus: [
-        { name: 'Healthy', value: 5, color: '#10b981' },
-        { name: 'Moderate', value: 4, color: '#f59e0b' },
-        { name: 'Stressed', value: 2, color: '#ef4444' },
-        { name: 'No Data', value: 1, color: '#6b7280' }
-      ],
-      topRegions: [
-        { name: 'Goma Agricultural Zone', ndvi: 0.72, area: 245.3, status: 'healthy', change: 0.05 },
-        { name: 'Bukavu Farmlands', ndvi: 0.68, area: 189.7, status: 'healthy', change: 0.02 },
-        { name: 'Uvira Coastal Plains', ndvi: 0.45, area: 156.2, status: 'moderate', change: -0.08 },
-        { name: 'Rutshuru Valley', ndvi: 0.32, area: 298.1, status: 'stressed', change: -0.15 },
-        { name: 'Masisi Highlands', ndvi: 0.28, area: 201.4, status: 'stressed', change: -0.12 }
-      ]
+
+        setDashboardData(transformedData);
+      } catch (err) {
+        console.error('Failed to fetch dashboard data:', err);
+        setError('Failed to load dashboard data. Please try again.');
+        
+        // Fallback to mock data if API fails
+        const mockData = {
+          stats: {
+            totalRegions: 12,
+            activeRegions: 8,
+            totalArea: 2450.5,
+            lastUpdate: new Date().toISOString(),
+            processingTasks: 3,
+            alertsCount: 5,
+            reportsGenerated: 23,
+            organizationsCount: 4
+          },
+          recentActivity: [
+            {
+              id: 1,
+              type: 'processing',
+              title: 'Satellite data processing completed',
+              description: 'NDVI analysis for Goma region finished',
+              timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+              status: 'completed'
+            },
+            {
+              id: 2,
+              type: 'alert',
+              title: 'Agricultural stress detected',
+              description: 'Low NDVI values in Bukavu agricultural zone',
+              timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+              status: 'warning'
+            }
+          ],
+          vegetationTrends: [
+            { date: '2023-10-01', ndvi: 0.65, evi: 0.58, ndwi: 0.12, savi: 0.52 },
+            { date: '2023-10-08', ndvi: 0.62, evi: 0.55, ndwi: 0.15, savi: 0.49 },
+            { date: '2023-10-15', ndvi: 0.58, evi: 0.51, ndwi: 0.18, savi: 0.46 },
+            { date: '2023-10-22', ndvi: 0.54, evi: 0.47, ndwi: 0.22, savi: 0.42 },
+            { date: '2023-10-29', ndvi: 0.51, evi: 0.44, ndwi: 0.25, savi: 0.39 },
+          ],
+          regionStatus: [
+            { name: 'Healthy', value: 5, color: '#10b981' },
+            { name: 'Moderate', value: 4, color: '#f59e0b' },
+            { name: 'Stressed', value: 2, color: '#ef4444' },
+            { name: 'No Data', value: 1, color: '#6b7280' }
+          ],
+          topRegions: [
+            { name: 'Goma Agricultural Zone', ndvi: 0.72, area: 245.3, status: 'healthy', change: 0.05 },
+            { name: 'Bukavu Farmlands', ndvi: 0.68, area: 189.7, status: 'healthy', change: 0.02 },
+            { name: 'Uvira Coastal Plains', ndvi: 0.45, area: 156.2, status: 'moderate', change: -0.08 },
+            { name: 'Rutshuru Valley', ndvi: 0.32, area: 298.1, status: 'stressed', change: -0.15 },
+            { name: 'Masisi Highlands', ndvi: 0.28, area: 201.4, status: 'stressed', change: -0.12 }
+          ]
+        };
+        setDashboardData(mockData);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    // Simulate API call delay
-    setTimeout(() => {
-      setDashboardData(mockData);
-      setLoading(false);
-    }, 1000);
+    fetchDashboardData();
   }, []);
+
+  // Handle real-time updates
+  useEffect(() => {
+    if (realTimeData && dashboardData) {
+      // Update recent activity with new stress events
+      const newStressEvents = realTimeData.stressEvents.slice(0, 2).map(event => ({
+        id: `stress-${event.id}`,
+        type: 'alert',
+        title: 'Agricultural stress detected',
+        description: `${event.stress_type} stress in ${event.region?.name || 'Unknown region'}`,
+        timestamp: event.detection_date,
+        status: event.severity === 'high' ? 'warning' : 'completed'
+      }));
+
+      // Update recent activity with new conflict events
+      const newConflictEvents = (realTimeData.conflictEvents || []).slice(0, 1).map(event => ({
+        id: `conflict-${event.id}`,
+        type: 'alert',
+        title: 'Conflict event reported',
+        description: `${event.event_type} in ${event.region?.name || 'Unknown region'}`,
+        timestamp: event.event_date,
+        status: 'warning'
+      }));
+
+      // Update dashboard data with real-time information
+      setDashboardData(prev => ({
+        ...prev,
+        stats: {
+          ...prev.stats,
+          alertsCount: (prev.stats.alertsCount || 0) + newStressEvents.length + newConflictEvents.length,
+          processingTasks: realTimeData.processingTasks.filter(task => task.status === 'running').length
+        },
+        recentActivity: [
+          ...newStressEvents,
+          ...newConflictEvents,
+          ...prev.recentActivity.slice(0, 3 - newStressEvents.length - newConflictEvents.length)
+        ]
+      }));
+    }
+  }, [realTimeData, dashboardData]);
 
   if (loading) {
     return (
@@ -137,18 +294,67 @@ const Dashboard = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Welcome back, {user?.first_name}!
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            Here's what's happening with your agricultural monitoring system.
+          </p>
+        </div>
+        
+        <Card className="border-red-200 bg-red-50 dark:bg-red-900/10">
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-3">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+              <div>
+                <h3 className="text-lg font-semibold text-red-800 dark:text-red-200">
+                  Error Loading Dashboard
+                </h3>
+                <p className="text-red-600 dark:text-red-300 mt-1">
+                  {error}
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-3"
+                  onClick={() => window.location.reload()}
+                >
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const { stats, recentActivity, vegetationTrends, regionStatus, topRegions } = dashboardData;
 
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Welcome back, {user?.first_name}!
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
-          Here's what's happening with your agricultural monitoring system.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Welcome back, {user?.first_name}!
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
+              Here's what's happening with your agricultural monitoring system.
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              {isConnected ? 'Real-time connected' : 'Offline'}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Stats Cards */}

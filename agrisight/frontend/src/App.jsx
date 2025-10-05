@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { WebSocketProvider } from './contexts/WebSocketContext';
 import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
@@ -97,7 +98,8 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router>
+        <WebSocketProvider>
+          <Router>
           <div className="App">
             <Routes>
             {/* Public routes */}
@@ -223,7 +225,8 @@ function App() {
               } />
             </Routes>
           </div>
-        </Router>
+          </Router>
+        </WebSocketProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
