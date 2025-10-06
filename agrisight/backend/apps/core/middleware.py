@@ -39,12 +39,19 @@ class ErrorHandlingMiddleware(MiddlewareMixin):
     
     def _log_exception(self, request, exception):
         """Log exception details."""
+        # Safely get user information
+        user_info = 'anonymous'
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            user_info = getattr(request.user, 'username', 'authenticated_user')
+        elif hasattr(request, 'user'):
+            user_info = 'anonymous'
+        
         logger.error(
             f"Exception in {request.method} {request.path}: {str(exception)}",
             extra={
                 'request_method': request.method,
                 'request_path': request.path,
-                'request_user': getattr(request.user, 'username', 'anonymous'),
+                'request_user': user_info,
                 'exception_type': type(exception).__name__,
                 'exception_message': str(exception),
                 'traceback': traceback.format_exc()
@@ -111,13 +118,20 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         """Log incoming request."""
         request._start_time = time.time()
         
+        # Safely get user information
+        user_info = 'anonymous'
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            user_info = getattr(request.user, 'username', 'authenticated_user')
+        elif hasattr(request, 'user'):
+            user_info = 'anonymous'
+        
         # Log request details
         logger.info(
             f"Incoming request: {request.method} {request.path}",
             extra={
                 'request_method': request.method,
                 'request_path': request.path,
-                'request_user': getattr(request.user, 'username', 'anonymous'),
+                'request_user': user_info,
                 'request_ip': self._get_client_ip(request),
                 'user_agent': request.META.get('HTTP_USER_AGENT', ''),
                 'request_size': len(request.body) if hasattr(request, 'body') else 0
@@ -129,12 +143,19 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         if hasattr(request, '_start_time'):
             duration = time.time() - request._start_time
             
+            # Safely get user information
+            user_info = 'anonymous'
+            if hasattr(request, 'user') and request.user.is_authenticated:
+                user_info = getattr(request.user, 'username', 'authenticated_user')
+            elif hasattr(request, 'user'):
+                user_info = 'anonymous'
+            
             logger.info(
                 f"Response: {request.method} {request.path} - {response.status_code} ({duration:.3f}s)",
                 extra={
                     'request_method': request.method,
                     'request_path': request.path,
-                    'request_user': getattr(request.user, 'username', 'anonymous'),
+                    'request_user': user_info,
                     'response_status': response.status_code,
                     'response_duration': duration,
                     'response_size': len(response.content) if hasattr(response, 'content') else 0
