@@ -135,11 +135,26 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📚 Documentation
 
-For detailed documentation, please see:
-- [API Documentation](http://localhost:8000/api/docs/)
-- [Deployment Guide](DEPLOYMENT_GUIDE.md)
-- [Setup Guide](SETUP_GUIDE.md)
-- [Frontend Implementation](FRONTEND_IMPLEMENTATION.md)
+### 📋 [Documentation Index](DOCUMENTATION_INDEX.md)
+Complete guide to all documentation organized by audience and use case.
+
+### Core Documentation
+- **[User Stories](USER_STORIES.md)** - Comprehensive user stories and requirements
+- **[API Documentation](API_DOCUMENTATION.md)** - Complete API reference and examples
+- **[Architecture](ARCHITECTURE.md)** - System architecture and design decisions
+- **[Security](SECURITY.md)** - Security measures and best practices
+- **[Development Guide](DEVELOPMENT_GUIDE.md)** - Development setup and workflow
+
+### Implementation Guides
+- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Production deployment instructions
+- **[Setup Guide](SETUP_GUIDE.md)** - Quick start and installation guide
+- **[Frontend Implementation](FRONTEND_IMPLEMENTATION.md)** - Frontend architecture and components
+- **[Authentication Architecture](AUTHENTICATION_ARCHITECTURE.md)** - Authentication system design
+- **[Sentinel Hub Integration](SENTINEL_HUB_INTEGRATION.md)** - Satellite data integration
+
+### API Reference
+- **[Interactive API Docs](http://localhost:8000/api/docs/)** - Swagger UI for API exploration
+- **[API Schema](http://localhost:8000/api/schema/)** - OpenAPI schema definition
 
 ## 📬 Contact
 
