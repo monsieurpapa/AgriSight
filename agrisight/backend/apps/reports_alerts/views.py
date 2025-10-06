@@ -3,6 +3,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
+from django.http import HttpResponse, Http404
+from django.shortcuts import get_object_or_404
 from .models import Report, Alert
 from .serializers import (
     ReportSerializer, ReportCreateSerializer,
@@ -178,4 +180,34 @@ def recent_alerts(request):
     recent_alerts = alerts.order_by('-created_at')[:limit]
     serializer = AlertSerializer(recent_alerts, many=True)
     return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def download_report(request, pk):
+    """Download a report as PDF or other format."""
+    user = request.user
+    
+    # Get the report with proper permissions
+    if user.user_type == 'admin':
+        report = get_object_or_404(Report, pk=pk)
+    elif user.organization:
+        report = get_object_or_404(Report, pk=pk, organization=user.organization)
+    else:
+        raise Http404("Report not found")
+    
+    # For now, return a simple text response
+    # In a real implementation, this would generate and return a PDF
+    content = f"""
+    Report: {report.title}
+    Type: {report.report_type}
+    Created: {report.created_at}
+    Organization: {report.organization.name if report.organization else 'N/A'}
+    
+    Summary: {report.summary or 'No summary available'}
+    """
+    
+    response = HttpResponse(content, content_type='text/plain')
+    response['Content-Disposition'] = f'attachment; filename="report_{report.id}.txt"'
+    return response
 

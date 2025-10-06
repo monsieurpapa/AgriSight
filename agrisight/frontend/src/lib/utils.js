@@ -69,6 +69,23 @@ export function getVegetationIndexColor(value, type = 'NDVI') {
   return 'text-yellow-600 dark:text-yellow-400';
 }
 
+export function getRiskLevelColor(riskLevel) {
+  switch (riskLevel?.toLowerCase()) {
+    case 'low':
+    case 'healthy':
+      return 'text-green-600 dark:text-green-400';
+    case 'medium':
+    case 'moderate':
+      return 'text-yellow-600 dark:text-yellow-400';
+    case 'high':
+    case 'critical':
+    case 'stressed':
+      return 'text-red-600 dark:text-red-400';
+    default:
+      return 'text-gray-600 dark:text-gray-400';
+  }
+}
+
 // Normalize API/axios errors to a displayable string
 export function getErrorMessage(error) {
   if (!error) return 'Unexpected error';

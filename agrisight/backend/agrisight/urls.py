@@ -6,10 +6,12 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
-from apps.core.routing import websocket_urlpatterns
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # Core endpoints
+    path('api/', include('apps.core.urls')),
     
     # Authentication endpoints
     path('api/auth/', include('apps.authentication.urls')),

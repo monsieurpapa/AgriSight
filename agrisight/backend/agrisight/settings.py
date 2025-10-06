@@ -34,6 +34,8 @@ THIRD_PARTY_APPS = [
     'django_filters',
     'drf_spectacular',
     'django_celery_beat',
+    # WebSocket support
+    'channels',
     # Authentication apps
     'django.contrib.sites',
     'allauth',
@@ -376,4 +378,17 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+# ASGI Configuration
+ASGI_APPLICATION = 'agrisight.asgi.application'
+
+# Channels Configuration
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [config('REDIS_URL', default='redis://redis:6379/1')],
+        },
+    },
+}
 
