@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   MapPin,
   Satellite,
@@ -11,7 +12,9 @@ import {
   Calendar,
   Clock,
   Eye,
-  Download
+  Download,
+  Plus,
+  Settings
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -53,6 +56,7 @@ const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   // Fetch real dashboard data from APIs
   useEffect(() => {
@@ -348,11 +352,34 @@ const Dashboard = () => {
               Here's what's happening with your agricultural monitoring system.
             </p>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              {isConnected ? 'Real-time connected' : 'Offline'}
-            </span>
+          <div className="flex items-center space-x-4">
+            {/* Real-time Status */}
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {isConnected ? 'Real-time connected' : 'Offline'}
+              </span>
+            </div>
+            
+            {/* Notifications Badge */}
+            {notifications && notifications.length > 0 && (
+              <div className="relative">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => navigate('/alerts')}
+                  className="relative"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Notifications
+                  {notifications.filter(n => !n.read).length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {notifications.filter(n => !n.read).length}
+                    </span>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -449,55 +476,108 @@ const Dashboard = () => {
         {/* Vegetation Trends */}
         <Card>
           <CardHeader>
-            <CardTitle>Vegetation Index Trends</CardTitle>
-            <CardDescription>
-              Weekly vegetation health indicators across all regions
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Vegetation Index Trends</CardTitle>
+                <CardDescription>
+                  Weekly vegetation health indicators across all regions
+                </CardDescription>
+              </div>
+              <div className="flex space-x-2">
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+                <Button variant="outline" size="sm">
+                  <Eye className="h-4 w-4 mr-2" />
+                  Full View
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={vegetationTrends}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis 
                     dataKey="date" 
                     tickFormatter={(value) => formatDate(value, 'MMM dd')}
+                    stroke="#6b7280"
+                    fontSize={12}
                   />
-                  <YAxis domain={[0, 1]} />
+                  <YAxis 
+                    domain={[0, 1]} 
+                    stroke="#6b7280"
+                    fontSize={12}
+                    tickFormatter={(value) => value.toFixed(2)}
+                  />
                   <Tooltip 
                     labelFormatter={(value) => formatDate(value)}
                     formatter={(value, name) => [formatVegetationIndex(value), name.toUpperCase()]}
+                    contentStyle={{
+                      backgroundColor: 'white',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="ndvi" 
                     stroke="#10b981" 
-                    strokeWidth={2}
+                    strokeWidth={3}
                     name="NDVI"
+                    dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2 }}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="evi" 
                     stroke="#3b82f6" 
-                    strokeWidth={2}
+                    strokeWidth={3}
                     name="EVI"
+                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="ndwi" 
                     stroke="#06b6d4" 
-                    strokeWidth={2}
+                    strokeWidth={3}
                     name="NDWI"
+                    dot={{ fill: '#06b6d4', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: '#06b6d4', strokeWidth: 2 }}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="savi" 
                     stroke="#f59e0b" 
-                    strokeWidth={2}
+                    strokeWidth={3}
                     name="SAVI"
+                    dot={{ fill: '#f59e0b', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: '#f59e0b', strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-center gap-4">
+              {[
+                { name: 'NDVI', color: '#10b981', description: 'Normalized Difference Vegetation Index' },
+                { name: 'EVI', color: '#3b82f6', description: 'Enhanced Vegetation Index' },
+                { name: 'NDWI', color: '#06b6d4', description: 'Normalized Difference Water Index' },
+                { name: 'SAVI', color: '#f59e0b', description: 'Soil Adjusted Vegetation Index' }
+              ].map((index) => (
+                <div key={index.name} className="flex items-center space-x-2">
+                  <div 
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: index.color }}
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {index.name}
+                  </span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -505,10 +585,20 @@ const Dashboard = () => {
         {/* Region Status Distribution */}
         <Card>
           <CardHeader>
-            <CardTitle>Region Health Status</CardTitle>
-            <CardDescription>
-              Distribution of agricultural health across monitored regions
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Region Health Status</CardTitle>
+                <CardDescription>
+                  Distribution of agricultural health across monitored regions
+                </CardDescription>
+              </div>
+              <div className="flex space-x-2">
+                <Button variant="outline" size="sm">
+                  <Eye className="h-4 w-4 mr-2" />
+                  Details
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="h-80">
@@ -522,25 +612,45 @@ const Dashboard = () => {
                     outerRadius={120}
                     paddingAngle={5}
                     dataKey="value"
+                    stroke="#fff"
+                    strokeWidth={2}
                   >
                     {regionStatus.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip 
+                    formatter={(value, name) => [value, name]}
+                    contentStyle={{
+                      backgroundColor: 'white',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex flex-wrap justify-center gap-4 mt-4">
+            <div className="grid grid-cols-2 gap-4 mt-4">
               {regionStatus.map((status, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <div 
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: status.color }}
-                  />
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {status.name} ({status.value})
-                  </span>
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div 
+                      className="w-4 h-4 rounded-full"
+                      style={{ backgroundColor: status.color }}
+                    />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {status.name}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-gray-900 dark:text-white">
+                      {status.value}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {((status.value / regionStatus.reduce((sum, s) => sum + s.value, 0)) * 100).toFixed(1)}%
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -641,34 +751,64 @@ const Dashboard = () => {
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>
-            Common tasks and shortcuts
+            Common tasks and shortcuts to help you get things done faster
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <Button variant="outline" className="flex flex-col items-center p-4 h-auto">
-              <Satellite className="h-6 w-6 mb-2" />
-              <span className="text-sm">Process Data</span>
+            <Button 
+              variant="outline" 
+              className="flex flex-col items-center p-4 h-auto hover:bg-green-50 hover:border-green-200 transition-colors"
+              onClick={() => navigate('/satellite')}
+            >
+              <Satellite className="h-6 w-6 mb-2 text-green-600" />
+              <span className="text-sm font-medium">Process Data</span>
+              <span className="text-xs text-gray-500 mt-1">Satellite Analysis</span>
             </Button>
-            <Button variant="outline" className="flex flex-col items-center p-4 h-auto">
-              <FileText className="h-6 w-6 mb-2" />
-              <span className="text-sm">Generate Report</span>
+            <Button 
+              variant="outline" 
+              className="flex flex-col items-center p-4 h-auto hover:bg-blue-50 hover:border-blue-200 transition-colors"
+              onClick={() => navigate('/reports')}
+            >
+              <FileText className="h-6 w-6 mb-2 text-blue-600" />
+              <span className="text-sm font-medium">Generate Report</span>
+              <span className="text-xs text-gray-500 mt-1">Custom Reports</span>
             </Button>
-            <Button variant="outline" className="flex flex-col items-center p-4 h-auto">
-              <MapPin className="h-6 w-6 mb-2" />
-              <span className="text-sm">Add Region</span>
+            <Button 
+              variant="outline" 
+              className="flex flex-col items-center p-4 h-auto hover:bg-purple-50 hover:border-purple-200 transition-colors"
+              onClick={() => navigate('/regions')}
+            >
+              <Plus className="h-6 w-6 mb-2 text-purple-600" />
+              <span className="text-sm font-medium">Add Region</span>
+              <span className="text-xs text-gray-500 mt-1">New Monitoring</span>
             </Button>
-            <Button variant="outline" className="flex flex-col items-center p-4 h-auto">
-              <AlertTriangle className="h-6 w-6 mb-2" />
-              <span className="text-sm">View Alerts</span>
+            <Button 
+              variant="outline" 
+              className="flex flex-col items-center p-4 h-auto hover:bg-red-50 hover:border-red-200 transition-colors"
+              onClick={() => navigate('/alerts')}
+            >
+              <AlertTriangle className="h-6 w-6 mb-2 text-red-600" />
+              <span className="text-sm font-medium">View Alerts</span>
+              <span className="text-xs text-gray-500 mt-1">{stats.alertsCount} Active</span>
             </Button>
-            <Button variant="outline" className="flex flex-col items-center p-4 h-auto">
-              <Download className="h-6 w-6 mb-2" />
-              <span className="text-sm">Export Data</span>
+            <Button 
+              variant="outline" 
+              className="flex flex-col items-center p-4 h-auto hover:bg-orange-50 hover:border-orange-200 transition-colors"
+              onClick={() => navigate('/exports')}
+            >
+              <Download className="h-6 w-6 mb-2 text-orange-600" />
+              <span className="text-sm font-medium">Export Data</span>
+              <span className="text-xs text-gray-500 mt-1">Download Files</span>
             </Button>
-            <Button variant="outline" className="flex flex-col items-center p-4 h-auto">
-              <Users className="h-6 w-6 mb-2" />
-              <span className="text-sm">Manage Users</span>
+            <Button 
+              variant="outline" 
+              className="flex flex-col items-center p-4 h-auto hover:bg-gray-50 hover:border-gray-200 transition-colors"
+              onClick={() => navigate('/organizations')}
+            >
+              <Users className="h-6 w-6 mb-2 text-gray-600" />
+              <span className="text-sm font-medium">Manage Users</span>
+              <span className="text-xs text-gray-500 mt-1">User Admin</span>
             </Button>
           </div>
         </CardContent>

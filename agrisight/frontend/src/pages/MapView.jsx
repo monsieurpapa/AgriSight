@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, GeoJSON, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, Popup, useMap, LayerGroup, CircleMarker } from 'react-leaflet';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Slider } from '../components/ui/slider';
 import { Badge } from '../components/ui/badge';
-import { MapPin, Layers, Satellite, Ruler, Download, AlertTriangle, Activity } from 'lucide-react';
+import { Checkbox } from '../components/ui/checkbox';
+import { MapPin, Layers, Satellite, Ruler, Download, AlertTriangle, Activity, Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react';
 import { geospatialAPI, analyticsAPI, satelliteProcessingAPI } from '../lib/api';
 import { formatDate, formatVegetationIndex, getVegetationIndexColor, getVegetationIndexLabel } from '../lib/utils';
 import 'leaflet/dist/leaflet.css';
@@ -44,9 +45,12 @@ const MapView = () => {
     ndvi: true,
     evi: false,
     ndwi: false,
-    stressEvents: true
+    stressEvents: true,
+    satellite: false
   });
   const [opacity, setOpacity] = useState(80);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [baseLayer, setBaseLayer] = useState('osm'); // osm, satellite, terrain
 
   // Fetch map data
   useEffect(() => {
@@ -182,12 +186,26 @@ const MapView = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Interactive Map</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            {regions.length} regions • {stressEvents.length} stress events
+            {regions.length} regions • {stressEvents.length} stress events • {baseLayer} view
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline"><Ruler className="h-4 w-4 mr-2"/>Measure</Button>
-          <Button><Download className="h-4 w-4 mr-2"/>Export View</Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setIsFullscreen(!isFullscreen)}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4 mr-2"/> : <Maximize2 className="h-4 w-4 mr-2"/>}
+            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          </Button>
+          <Button variant="outline" size="sm">
+            <Ruler className="h-4 w-4 mr-2"/>
+            Measure
+          </Button>
+          <Button size="sm">
+            <Download className="h-4 w-4 mr-2"/>
+            Export
+          </Button>
         </div>
       </div>
 
@@ -202,10 +220,25 @@ const MapView = () => {
                   style={{ height: '100%', width: '100%' }}
                   zoomControl={true}
                 >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
+                  {/* Base Layers */}
+                  {baseLayer === 'osm' && (
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                  )}
+                  {baseLayer === 'satellite' && (
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                    />
+                  )}
+                  {baseLayer === 'terrain' && (
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: USGS, Esri, TANA, DeLorme, and NPS'
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+                    />
+                  )}
                   
                   {/* Update map bounds when regions change */}
                   <MapBoundsUpdater regions={regions} />
@@ -251,44 +284,95 @@ const MapView = () => {
                     )
                   ))}
                   
-                  {/* Render stress events */}
-                  {layers.stressEvents && stressEvents.map((event) => (
-                    event.region?.geometry && (
-                      <GeoJSON
-                        key={`stress-${event.id}`}
-                        data={event.region.geometry}
-                        style={{
-                          color: event.severity === 'high' ? '#ef4444' : 
-                                 event.severity === 'medium' ? '#f59e0b' : '#10b981',
-                          weight: 3,
-                          opacity: 0.9,
-                          fillOpacity: 0.1
-                        }}
-                      >
-                        <Popup>
-                          <div className="p-2">
-                            <h3 className="font-semibold text-gray-900">Stress Event</h3>
-                            <p className="text-sm text-gray-600">
-                              Type: {event.stress_type}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Severity: <Badge variant="outline" className={getVegetationIndexColor(event.severity === 'high' ? 0.2 : event.severity === 'medium' ? 0.5 : 0.8, 'NDVI')}>
-                                {event.severity}
-                              </Badge>
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Detected: {formatDate(event.detection_date)}
-                            </p>
-                            {event.affected_area_hectares && (
-                              <p className="text-sm text-gray-600">
-                                Affected Area: {(event.affected_area_hectares / 100).toFixed(1)} km²
-                              </p>
-                            )}
-                          </div>
-                        </Popup>
-                      </GeoJSON>
-                    )
-                  ))}
+                  {/* Render stress events with enhanced visualization */}
+                  {layers.stressEvents && (
+                    <LayerGroup>
+                      {stressEvents.map((event) => {
+                        // Calculate center point of region for marker placement
+                        let centerLat = 0, centerLng = 0;
+                        if (event.region?.geometry?.coordinates?.[0]) {
+                          const coords = event.region.geometry.coordinates[0];
+                          const sum = coords.reduce((acc, coord) => {
+                            acc.lat += coord[1];
+                            acc.lng += coord[0];
+                            return acc;
+                          }, { lat: 0, lng: 0 });
+                          centerLat = sum.lat / coords.length;
+                          centerLng = sum.lng / coords.length;
+                        }
+                        
+                        const severityColor = event.severity === 'high' ? '#ef4444' : 
+                                            event.severity === 'medium' ? '#f59e0b' : '#10b981';
+                        const severitySize = event.severity === 'high' ? 12 : 
+                                           event.severity === 'medium' ? 8 : 6;
+                        
+                        return (
+                          <CircleMarker
+                            key={`stress-marker-${event.id}`}
+                            center={[centerLat, centerLng]}
+                            radius={severitySize}
+                            pathOptions={{
+                              color: severityColor,
+                              fillColor: severityColor,
+                              fillOpacity: 0.7,
+                              weight: 2,
+                              opacity: 0.9
+                            }}
+                          >
+                            <Popup>
+                              <div className="p-3 min-w-[200px]">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                                  <h3 className="font-semibold text-gray-900">Stress Event</h3>
+                                </div>
+                                <div className="space-y-2 text-sm">
+                                  <div>
+                                    <span className="font-medium text-gray-700">Type:</span>
+                                    <span className="ml-2 text-gray-600">{event.stress_type}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-700">Severity:</span>
+                                    <Badge 
+                                      variant="outline" 
+                                      className={`ml-2 ${
+                                        event.severity === 'high' ? 'border-red-500 text-red-700' :
+                                        event.severity === 'medium' ? 'border-yellow-500 text-yellow-700' :
+                                        'border-green-500 text-green-700'
+                                      }`}
+                                    >
+                                      {event.severity}
+                                    </Badge>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-700">Region:</span>
+                                    <span className="ml-2 text-gray-600">{event.region?.name || 'Unknown'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-700">Detected:</span>
+                                    <span className="ml-2 text-gray-600">{formatDate(event.detection_date)}</span>
+                                  </div>
+                                  {event.affected_area_hectares && (
+                                    <div>
+                                      <span className="font-medium text-gray-700">Affected Area:</span>
+                                      <span className="ml-2 text-gray-600">
+                                        {(event.affected_area_hectares / 100).toFixed(1)} km²
+                                      </span>
+                                    </div>
+                                  )}
+                                  {event.description && (
+                                    <div>
+                                      <span className="font-medium text-gray-700">Description:</span>
+                                      <p className="mt-1 text-gray-600 text-xs">{event.description}</p>
+                                    </div>
+                                  )}
+                                </div>
+                </div>
+                            </Popup>
+                          </CircleMarker>
+                        );
+                      })}
+                    </LayerGroup>
+                  )}
                 </MapContainer>
               </div>
             </CardContent>
@@ -296,103 +380,267 @@ const MapView = () => {
         </div>
         
         <div className="lg:col-span-1 space-y-6">
+          {/* Base Layer Selection */}
           <Card>
             <CardHeader>
-              <CardTitle>Layers</CardTitle>
-              <CardDescription>Select overlays</CardDescription>
+              <CardTitle>Base Map</CardTitle>
+              <CardDescription>Choose your base layer</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <Layers className="h-4 w-4"/> NDVI
-                </div>
-                <input 
-                  type="checkbox" 
-                  checked={layers.ndvi}
-                  onChange={(e) => setLayers(prev => ({ ...prev, ndvi: e.target.checked }))}
-                  className="h-4 w-4"
-                />
+              <div className="grid grid-cols-1 gap-2">
+                <Button
+                  variant={baseLayer === 'osm' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setBaseLayer('osm')}
+                  className="justify-start"
+                >
+                  <MapPin className="h-4 w-4 mr-2" />
+                  OpenStreetMap
+                </Button>
+                <Button
+                  variant={baseLayer === 'satellite' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setBaseLayer('satellite')}
+                  className="justify-start"
+                >
+                  <Satellite className="h-4 w-4 mr-2" />
+                  Satellite Imagery
+                </Button>
+                <Button
+                  variant={baseLayer === 'terrain' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setBaseLayer('terrain')}
+                  className="justify-start"
+                >
+                  <Layers className="h-4 w-4 mr-2" />
+                  Terrain
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Layer Controls */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Data Layers</CardTitle>
+              <CardDescription>Toggle vegetation and event overlays</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Vegetation Indices */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Vegetation Indices</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      NDVI
+                    </div>
+                    <Checkbox 
+                      checked={layers.ndvi}
+                      onCheckedChange={(checked) => setLayers(prev => ({ ...prev, ndvi: checked }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      EVI
+                    </div>
+                    <Checkbox 
+                      checked={layers.evi}
+                      onCheckedChange={(checked) => setLayers(prev => ({ ...prev, evi: checked }))}
+                    />
               </div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <Layers className="h-4 w-4"/> EVI
+                    <div className="flex items-center gap-2 text-sm">
+                      <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
+                      NDWI
+                    </div>
+                    <Checkbox 
+                      checked={layers.ndwi}
+                      onCheckedChange={(checked) => setLayers(prev => ({ ...prev, ndwi: checked }))}
+                    />
+                  </div>
                 </div>
-                <input 
-                  type="checkbox" 
-                  checked={layers.evi}
-                  onChange={(e) => setLayers(prev => ({ ...prev, evi: e.target.checked }))}
-                  className="h-4 w-4"
-                />
               </div>
+
+              {/* Events */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Events</h4>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <Layers className="h-4 w-4"/> NDWI
+                  <div className="flex items-center gap-2 text-sm">
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    Stress Events
+                    <Badge variant="secondary" className="text-xs">
+                      {stressEvents.length}
+                    </Badge>
+                  </div>
+                  <Checkbox 
+                    checked={layers.stressEvents}
+                    onCheckedChange={(checked) => setLayers(prev => ({ ...prev, stressEvents: checked }))}
+                  />
                 </div>
-                <input 
-                  type="checkbox" 
-                  checked={layers.ndwi}
-                  onChange={(e) => setLayers(prev => ({ ...prev, ndwi: e.target.checked }))}
-                  className="h-4 w-4"
-                />
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <AlertTriangle className="h-4 w-4"/> Stress Events
+
+              {/* Opacity Control */}
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Opacity</p>
+                  <span className="text-xs text-gray-500">{opacity}%</span>
                 </div>
-                <input 
-                  type="checkbox" 
-                  checked={layers.stressEvents}
-                  onChange={(e) => setLayers(prev => ({ ...prev, stressEvents: e.target.checked }))}
-                  className="h-4 w-4"
-                />
-              </div>
-              <div className="pt-2">
-                <p className="text-xs text-gray-500 mb-2">Opacity</p>
                 <Slider 
                   value={[opacity]} 
                   onValueChange={(value) => setOpacity(value[0])}
                   max={100} 
-                  step={1}
+                  step={5}
+                  className="w-full"
                 />
               </div>
             </CardContent>
           </Card>
           
+          {/* Map Legend */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Legend</CardTitle>
+              <CardDescription>Map symbols and colors</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Stress Event Severity */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Stress Events</h4>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <span>High Severity</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+                    <span>Medium Severity</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    <span>Low Severity</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Region Health */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Region Health</h4>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-3 h-3 border-2 border-green-500 bg-green-100"></div>
+                    <span>Healthy</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-3 h-3 border-2 border-yellow-500 bg-yellow-100"></div>
+                    <span>Moderate Stress</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-3 h-3 border-2 border-red-500 bg-red-100"></div>
+                    <span>High Stress</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vegetation Indices */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Vegetation Indices</h4>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-3 h-1 bg-green-500"></div>
+                    <span>NDVI (Vegetation)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-3 h-1 bg-blue-500"></div>
+                    <span>EVI (Enhanced)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-3 h-1 bg-cyan-500"></div>
+                    <span>NDWI (Water)</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {selectedRegion && (
             <Card>
               <CardHeader>
                 <CardTitle>Selected Region</CardTitle>
-                <CardDescription>Context</CardDescription>
+                <CardDescription>Detailed information</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-start gap-2 text-sm">
-                  <MapPin className="h-4 w-4 mt-0.5"/>
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedRegion.name}</p>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      Area: {(selectedRegion.area_hectares / 100).toFixed(1)} km²
-                    </p>
-                    {(() => {
-                      const latestNDVI = getLatestVegetationIndex(selectedRegion.id, 'NDVI');
-                      return latestNDVI ? (
-                        <p className="text-gray-600 dark:text-gray-400">
-                          Latest NDVI: {formatVegetationIndex(latestNDVI.mean_value)} • {formatDate(latestNDVI.date)}
-                        </p>
-                      ) : (
-                        <p className="text-gray-500 dark:text-gray-500">No vegetation data available</p>
-                      );
-                    })()}
-                    {(() => {
-                      const regionStressEvents = stressEvents.filter(event => event.region?.id === selectedRegion.id);
-                      return regionStressEvents.length > 0 ? (
-                        <div className="mt-2">
-                          <p className="text-sm font-medium text-red-600">
-                            {regionStressEvents.length} stress event{regionStressEvents.length > 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      ) : null;
-                    })()}
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 text-sm">
+                    <MapPin className="h-4 w-4 mt-0.5 text-blue-500"/>
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">{selectedRegion.name}</p>
+                      <p className="text-gray-600 dark:text-gray-400">
+                        Area: {(selectedRegion.area_hectares / 100).toFixed(1)} km²
+                      </p>
+                    </div>
                   </div>
+                  
+                  {(() => {
+                    const latestNDVI = getLatestVegetationIndex(selectedRegion.id, 'NDVI');
+                    return latestNDVI ? (
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Latest NDVI</span>
+                          <Badge 
+                            variant="outline" 
+                            className={getVegetationIndexColor(latestNDVI.mean_value, 'NDVI')}
+                          >
+                            {getVegetationIndexLabel(latestNDVI.mean_value, 'NDVI')}
+                          </Badge>
+                        </div>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">
+                          {formatVegetationIndex(latestNDVI.mean_value)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatDate(latestNDVI.date)}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">No vegetation data available</p>
+                      </div>
+                    );
+                  })()}
+                  
+                  {(() => {
+                    const regionStressEvents = stressEvents.filter(event => event.region?.id === selectedRegion.id);
+                    return regionStressEvents.length > 0 ? (
+                      <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                          <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                            {regionStressEvents.length} stress event{regionStressEvents.length > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          {regionStressEvents.slice(0, 3).map((event, index) => (
+                            <div key={index} className="text-xs text-red-600 dark:text-red-400">
+                              • {event.stress_type} ({event.severity})
+                            </div>
+                          ))}
+                          {regionStressEvents.length > 3 && (
+                            <div className="text-xs text-red-500">
+                              +{regionStressEvents.length - 3} more...
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                          <span className="text-sm text-green-700 dark:text-green-300">No stress events</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>

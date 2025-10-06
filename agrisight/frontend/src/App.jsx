@@ -24,6 +24,7 @@ const Profile = lazy(() => import('./pages/Profile'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Register = lazy(() => import('./pages/Register'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const Terms = lazy(() => import('./pages/Terms'));
 const Support = lazy(() => import('./pages/Support'));
@@ -121,6 +122,13 @@ function App() {
                 <PublicRoute>
                   <Suspense fallback={<Fallback />}>
                     <ForgotPassword />
+                  </Suspense>
+                </PublicRoute>
+              } />
+              <Route path="/reset-password" element={
+                <PublicRoute>
+                  <Suspense fallback={<Fallback />}>
+                    <ResetPassword />
                   </Suspense>
                 </PublicRoute>
               } />
