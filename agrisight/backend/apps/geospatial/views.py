@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import Distance
+from apps.authentication.permissions import (
+    CanViewData, CanManageRegions, CanViewAllRegions, CanManageOrganizations,
+    user_has_permission
+)
 from .models import Region, RegionAccess, SatelliteImage, VegetationIndex, Crop, CropMapping
 from .serializers import (
     RegionSerializer, RegionAccessSerializer, SatelliteImageSerializer,
@@ -16,19 +20,25 @@ class RegionListCreateView(generics.ListCreateAPIView):
     """List all accessible regions or create a new region."""
     
     serializer_class = RegionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CanViewData]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['country', 'province']
     
     def get_queryset(self):
         # Users can only see regions their organization has access to
         user = self.request.user
-        if user.user_type == 'admin':
+        if user.user_type == 'admin' or user_has_permission(user, 'view_all_regions'):
             return Region.objects.all()
         elif user.organization:
             return Region.objects.filter(organizations=user.organization)
         else:
             return Region.objects.none()
+    
+    def perform_create(self, serializer):
+        # Only users with manage_regions permission can create regions
+        if not user_has_permission(self.request.user, 'manage_regions'):
+            raise permissions.PermissionDenied("You don't have permission to create regions.")
+        serializer.save()
 
 
 class RegionDetailView(generics.RetrieveUpdateDestroyAPIView):

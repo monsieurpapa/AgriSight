@@ -355,10 +355,54 @@ export const AuthProvider = ({ children }) => {
   // Utility functions
   const hasRole = (role) => {
     if (!state.user) return false;
-    return state.user.user_type_code === role;
+    // Handle both user_type and user_type_code for backward compatibility
+    return state.user.user_type === role || state.user.user_type_code === role;
   };
 
   const isAdmin = () => hasRole('admin');
+  
+  const hasPermission = (permission) => {
+    if (!state.user) return false;
+    
+    // Admin has all permissions
+    if (hasRole('admin')) return true;
+    
+    // Check user-specific permissions
+    if (state.user.permissions && state.user.permissions.includes(permission)) {
+      return true;
+    }
+    
+    // Check role-based permissions (must match backend)
+    const rolePermissions = {
+      'admin': ['*'], // All permissions
+      'humanitarian': ['view_data', 'export_data', 'generate_reports', 'view_analytics'],
+      'cooperative': ['view_data', 'view_analytics', 'manage_regions', 'view_stress_events'],
+      'government': ['view_data', 'view_analytics', 'manage_organizations', 'view_all_regions'],
+      'researcher': ['view_data', 'view_analytics', 'export_data', 'view_stress_events', 'view_conflict_events']
+    };
+    
+    const userRole = state.user.user_type || state.user.user_type_code;
+    const permissions = rolePermissions[userRole] || [];
+    
+    return permissions.includes('*') || permissions.includes(permission);
+  };
+  
+  const getUserType = () => {
+    if (!state.user) return null;
+    return state.user.user_type || state.user.user_type_code;
+  };
+  
+  const getUserTypeLabel = () => {
+    const userType = getUserType();
+    const labels = {
+      'admin': 'Administrator',
+      'humanitarian': 'Humanitarian Organization',
+      'cooperative': 'Agricultural Cooperative',
+      'government': 'Government Agency',
+      'researcher': 'Researcher'
+    };
+    return labels[userType] || 'User';
+  };
 
   const value = {
     ...state,
@@ -377,6 +421,9 @@ export const AuthProvider = ({ children }) => {
     clearError,
     hasRole,
     isAdmin,
+    hasPermission,
+    getUserType,
+    getUserTypeLabel,
   };
 
   return (

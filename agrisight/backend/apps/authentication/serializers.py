@@ -75,13 +75,14 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
     user_type_code = serializers.CharField(source='user_type', read_only=True)
     organization = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
             'pk', 'email', 'first_name', 'last_name', 'full_name',
             'user_type', 'user_type_code', 'organization', 'phone_number',
-            'date_joined', 'last_login', 'is_active'
+            'date_joined', 'last_login', 'is_active', 'permissions'
         )
         read_only_fields = ('pk', 'email', 'date_joined', 'last_login', 'is_active')
 
@@ -102,6 +103,22 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
         Get user's full name.
         """
         return f"{obj.first_name} {obj.last_name}".strip()
+
+    def get_permissions(self, obj):
+        """
+        Get user permissions based on user type.
+        """
+        # Define role-based permissions
+        role_permissions = {
+            'admin': ['*'],  # All permissions
+            'humanitarian': ['view_data', 'export_data', 'generate_reports', 'view_analytics'],
+            'cooperative': ['view_data', 'view_analytics', 'manage_regions', 'view_stress_events'],
+            'government': ['view_data', 'view_analytics', 'manage_organizations', 'view_all_regions'],
+            'researcher': ['view_data', 'view_analytics', 'export_data', 'view_stress_events', 'view_conflict_events']
+        }
+        
+        user_type = obj.user_type
+        return role_permissions.get(user_type, ['view_data'])
 
 
 class PasswordChangeSerializer(serializers.Serializer):
