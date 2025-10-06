@@ -22,6 +22,7 @@ AgriSight is a comprehensive agricultural monitoring platform designed for human
 ### Prerequisites
 - Docker Desktop
 - Git
+- Make (optional, for enhanced operations)
 
 ### Installation
    ```bash
@@ -29,7 +30,11 @@ AgriSight is a comprehensive agricultural monitoring platform designed for human
 git clone <repository-url>
 cd agrisight
 
-# Start the platform
+# Option 1: Using Makefile (Recommended)
+make setup
+make createsuperuser
+
+# Option 2: Using shell scripts
 ./start_and_test.sh  # Linux/Mac
 # OR
 start_and_test.bat   # Windows
@@ -38,7 +43,58 @@ start_and_test.bat   # Windows
 ### Access the Platform
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
-- **Health Check**: http://localhost:8000/health/detailed/
+- **Health Check**: http://localhost:8000/api/health/
+- **API Documentation**: http://localhost:8000/api/docs/
+
+### Quick Operations
+
+#### Using Makefile (Linux/Mac/Windows with Make)
+```bash
+# Show all available commands
+make help
+
+# Start the platform
+make up
+
+# View logs
+make logs
+
+# Check service health
+make health-check
+
+# Stop the platform
+make down
+```
+
+#### Using Windows Scripts (Windows without Make)
+```cmd
+# Show all available commands
+agrisight.bat help
+
+# Start the platform
+agrisight.bat up
+
+# View logs
+agrisight.bat logs
+
+# Check service health
+agrisight.bat health-check
+```
+
+#### Using PowerShell (Windows)
+```powershell
+# Show all available commands
+.\agrisight.ps1 help
+
+# Start the platform
+.\agrisight.ps1 up
+
+# View logs
+.\agrisight.ps1 logs
+
+# Check service health
+.\agrisight.ps1 health-check
+```
 
 ## 📚 Documentation
 
@@ -47,6 +103,8 @@ start_and_test.bat   # Windows
 - **[API Synchronization](API_SYNCHRONIZATION.md)** - Frontend-backend API mapping and error handling
 - **[User Stories & Epics](USER_STORIES_AND_EPICS.md)** - Complete user story documentation
 - **[Next Features Plan](NEXT_FEATURES_PRIORITY_PLAN.md)** - Roadmap for upcoming features
+- **[Makefile Usage Guide](MAKEFILE_USAGE.md)** - Comprehensive guide for platform operations and maintenance
+- **[Windows Make Setup](WINDOWS_MAKE_SETUP.md)** - Guide for installing and using Make on Windows
 
 ### Technical Documentation
 - **[Frontend Implementation](FRONTEND_IMPLEMENTATION.md)** - React frontend architecture and components
