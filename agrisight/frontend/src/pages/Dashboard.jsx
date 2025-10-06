@@ -39,6 +39,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
 import { dashboardAPI, satelliteProcessingAPI, analyticsAPI } from '../lib/api';
+import APIError from '../components/error/APIError';
 import { 
   formatDate, 
   formatRelativeTime, 
@@ -298,44 +299,27 @@ const Dashboard = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Welcome back, {user?.first_name}!
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Here's what's happening with your agricultural monitoring system.
-          </p>
-        </div>
-        
-        <Card className="border-red-200 bg-red-50 dark:bg-red-900/10">
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-3">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
-              <div>
-                <h3 className="text-lg font-semibold text-red-800 dark:text-red-200">
-                  Error Loading Dashboard
-                </h3>
-                <p className="text-red-600 dark:text-red-300 mt-1">
-                  {error}
-                </p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="mt-3"
-                  onClick={() => window.location.reload()}
-                >
-                  Retry
-                </Button>
+          if (error) {
+            return (
+              <div className="space-y-6">
+                <div className="mb-8">
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                    Welcome back, {user?.first_name}!
+                  </h1>
+                  <p className="text-gray-600 dark:text-gray-400 mt-2">
+                    Here's what's happening with your agricultural monitoring system.
+                  </p>
+                </div>
+                
+                <APIError 
+                  error={error}
+                  onRetry={() => window.location.reload()}
+                  title="Dashboard Loading Error"
+                  description="Failed to load dashboard data. Please try again."
+                />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+            );
+          }
 
   const { stats, recentActivity, vegetationTrends, regionStatus, topRegions } = dashboardData;
 

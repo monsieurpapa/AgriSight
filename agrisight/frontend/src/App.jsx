@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
+import ErrorBoundary from './components/error/ErrorBoundary';
+import ErrorPage from './components/error/ErrorPage';
 import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
@@ -97,12 +99,13 @@ const Fallback = () => (
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <WebSocketProvider>
-          <Router>
-          <div className="App">
-            <Routes>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <WebSocketProvider>
+            <Router>
+            <div className="App">
+              <Routes>
             {/* Public routes */}
             <Route path="/landing" element={<Landing />} />
             <Route path="/demo" element={<PublicDemo />} />
@@ -227,6 +230,14 @@ function App() {
                 } />
               </Route>
 
+              {/* Error routes */}
+              <Route path="/error/400" element={<ErrorPage status={400} />} />
+              <Route path="/error/401" element={<ErrorPage status={401} />} />
+              <Route path="/error/403" element={<ErrorPage status={403} />} />
+              <Route path="/error/404" element={<ErrorPage status={404} />} />
+              <Route path="/error/500" element={<ErrorPage status={500} />} />
+              <Route path="/error/network" element={<ErrorPage status="NETWORK_ERROR" />} />
+
               {/* Catch all route */}
               <Route path="*" element={
                 <Navigate to="/landing" replace />
@@ -237,6 +248,7 @@ function App() {
         </WebSocketProvider>
       </AuthProvider>
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

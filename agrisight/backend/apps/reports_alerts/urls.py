@@ -7,6 +7,7 @@ urlpatterns = [
     # Reports
     path('reports/', views.ReportListCreateView.as_view(), name='report-list-create'),
     path('reports/<uuid:pk>/', views.ReportDetailView.as_view(), name='report-detail'),
+    path('reports/<uuid:pk>/download/', views.download_report, name='download-report'),
     
     # Alerts
     path('alerts/', views.AlertListCreateView.as_view(), name='alert-list-create'),

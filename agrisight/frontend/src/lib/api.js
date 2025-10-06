@@ -1,62 +1,7 @@
-import axios from 'axios';
+import apiClient from './apiClient';
 
-// Backend serves API at /api/v1/ so base URL should not include /api
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-const http = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-// CSRF token handling for session authentication
-let csrfToken = null;
-
-const getCsrfToken = async () => {
-  if (!csrfToken) {
-    try {
-      const response = await http.get('/api/auth/csrf/');
-      csrfToken = response.data.csrfToken;
-    } catch (error) {
-      console.error('Failed to get CSRF token:', error);
-    }
-  }
-  return csrfToken;
-};
-
-// Simplified request interceptor - no async operations
-http.interceptors.request.use((config) => {
-  // Skip CSRF for GET requests and CSRF endpoint itself
-  if (config.method !== 'get' && !config.url.includes('/csrf/') && csrfToken) {
-    config.headers['X-CSRFToken'] = csrfToken;
-  }
-  return config;
-});
-
-// Handle CSRF token refresh on 403 responses
-http.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 403 && error.response?.data?.detail?.includes('CSRF')) {
-      // Clear cached CSRF token and retry
-      csrfToken = null;
-      const originalRequest = error.config;
-      if (!originalRequest._retry) {
-        originalRequest._retry = true;
-        const token = await getCsrfToken();
-        if (token) {
-          originalRequest.headers['X-CSRFToken'] = token;
-          return http(originalRequest);
-        }
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
-// Wrap response to always return .data for convenience
-const get = (url, config) => http.get(url, config).then((r) => r.data);
-const post = (url, data, config) => http.post(url, data, config).then((r) => r.data);
+// Use the enhanced API client with comprehensive error handling
+const { get, post, put, patch, delete: del, upload, download } = apiClient;
 
 export const regionsAPI = {
   getRegions() {
@@ -68,24 +13,74 @@ export const regionsAPI = {
 };
 
 export const alertsAPI = {
-  getAlerts() {
-    return get('/api/v1/reports-alerts/alerts/');
+  getAlerts(params = {}) {
+    const queryParams = new URLSearchParams(params).toString();
+    return get(`/api/v1/reports-alerts/alerts/${queryParams ? '?' + queryParams : ''}`);
   },
+  getAlert(id) {
+    return get(`/api/v1/reports-alerts/alerts/${id}/`);
+  },
+  markAlertAsRead(id) {
+    return post(`/api/v1/reports-alerts/alerts/${id}/mark-read/`);
+  },
+  markAllAlertsAsRead() {
+    return post('/api/v1/reports-alerts/alerts/mark-all-read/');
+  },
+  getUnreadCount() {
+    return get('/api/v1/reports-alerts/alerts/unread-count/');
+  },
+  getRecentAlerts() {
+    return get('/api/v1/reports-alerts/alerts/recent/');
+  }
 };
 
 export const reportsAPI = {
-  getReports() {
-    return get('/api/v1/reports-alerts/reports/');
+  getReports(params = {}) {
+    const queryParams = new URLSearchParams(params).toString();
+    return get(`/api/v1/reports-alerts/reports/${queryParams ? '?' + queryParams : ''}`);
+  },
+  getReport(id) {
+    return get(`/api/v1/reports-alerts/reports/${id}/`);
   },
   createReport(payload) {
     return post('/api/v1/reports-alerts/reports/', payload);
   },
+  updateReport(id, payload) {
+    return put(`/api/v1/reports-alerts/reports/${id}/`, payload);
+  },
+  deleteReport(id) {
+    return del(`/api/v1/reports-alerts/reports/${id}/`);
+  },
+  downloadReport(id) {
+    return download(`/api/v1/reports-alerts/reports/${id}/download/`);
+  }
 };
 
 export const organizationsAPI = {
   getOrganizations() {
     return get('/api/v1/organizations/');
   },
+  getOrganization(id) {
+    return get(`/api/v1/organizations/${id}/`);
+  },
+  getCurrentOrganization() {
+    return get('/api/v1/organizations/current/');
+  },
+  createOrganization(payload) {
+    return post('/api/v1/organizations/', payload);
+  },
+  updateOrganization(id, payload) {
+    return put(`/api/v1/organizations/${id}/`, payload);
+  },
+  deleteOrganization(id) {
+    return del(`/api/v1/organizations/${id}/`);
+  },
+  getSubscriptionPlans() {
+    return get('/api/v1/organizations/subscription-plans/');
+  },
+  getSubscriptionPlan(id) {
+    return get(`/api/v1/organizations/subscription-plans/${id}/`);
+  }
 };
 
 // Satellite Processing API
@@ -104,6 +99,11 @@ export const satelliteProcessingAPI = {
   getRegionVegetationData(regionId, params = {}) {
     const queryParams = new URLSearchParams(params).toString();
     return get(`/api/v1/satellite-processing/vegetation/${regionId}/${queryParams ? '?' + queryParams : ''}`);
+  },
+  
+  // Manual data ingestion
+  manualDataIngestion(payload) {
+    return post('/api/v1/satellite-processing/ingest/', payload);
   },
   
   // Get trend analysis
@@ -203,6 +203,108 @@ export const dashboardAPI = {
   }
 };
 
+// Users API
+export const usersAPI = {
+  getUsers(params = {}) {
+    const queryParams = new URLSearchParams(params).toString();
+    return get(`/api/v1/users/${queryParams ? '?' + queryParams : ''}`);
+  },
+  getUser(id) {
+    return get(`/api/v1/users/${id}/`);
+  },
+  getCurrentUser() {
+    return get('/api/v1/users/me/');
+  },
+  updateCurrentUser(payload) {
+    return patch('/api/v1/users/me/update/', payload);
+  },
+  createUser(payload) {
+    return post('/api/v1/users/', payload);
+  },
+  updateUser(id, payload) {
+    return put(`/api/v1/users/${id}/`, payload);
+  },
+  deleteUser(id) {
+    return del(`/api/v1/users/${id}/`);
+  }
+};
+
+// ML Models API
+export const mlModelsAPI = {
+  getModels(params = {}) {
+    const queryParams = new URLSearchParams(params).toString();
+    return get(`/api/v1/ml-models/models/${queryParams ? '?' + queryParams : ''}`);
+  },
+  getModel(id) {
+    return get(`/api/v1/ml-models/models/${id}/`);
+  },
+  createModel(payload) {
+    return post('/api/v1/ml-models/models/', payload);
+  },
+  updateModel(id, payload) {
+    return put(`/api/v1/ml-models/models/${id}/`, payload);
+  },
+  deleteModel(id) {
+    return del(`/api/v1/ml-models/models/${id}/`);
+  },
+  startTraining(id) {
+    return post(`/api/v1/ml-models/models/${id}/train/`);
+  },
+  makePrediction(id, payload) {
+    return post(`/api/v1/ml-models/models/${id}/predict/`, payload);
+  },
+  getModelPerformance(id) {
+    return get(`/api/v1/ml-models/models/${id}/performance/`);
+  },
+  getTrainingJobs(params = {}) {
+    const queryParams = new URLSearchParams(params).toString();
+    return get(`/api/v1/ml-models/training-jobs/${queryParams ? '?' + queryParams : ''}`);
+  },
+  getTrainingJob(id) {
+    return get(`/api/v1/ml-models/training-jobs/${id}/`);
+  },
+  getTrainingStatus(id) {
+    return get(`/api/v1/ml-models/training-jobs/${id}/status/`);
+  },
+  getPredictions(params = {}) {
+    const queryParams = new URLSearchParams(params).toString();
+    return get(`/api/v1/ml-models/predictions/${queryParams ? '?' + queryParams : ''}`);
+  },
+  getPrediction(id) {
+    return get(`/api/v1/ml-models/predictions/${id}/`);
+  },
+  compareModels(payload) {
+    return post('/api/v1/ml-models/compare-models/', payload);
+  },
+  getFeatureImportance(modelId) {
+    return get(`/api/v1/ml-models/feature-importance/${modelId}/`);
+  }
+};
+
+// API Keys and Logs API
+export const apiKeysAPI = {
+  getAPIKeys(params = {}) {
+    const queryParams = new URLSearchParams(params).toString();
+    return get(`/api/v1/api-keys/keys/${queryParams ? '?' + queryParams : ''}`);
+  },
+  getAPIKey(id) {
+    return get(`/api/v1/api-keys/keys/${id}/`);
+  },
+  createAPIKey(payload) {
+    return post('/api/v1/api-keys/keys/', payload);
+  },
+  updateAPIKey(id, payload) {
+    return put(`/api/v1/api-keys/keys/${id}/`, payload);
+  },
+  deleteAPIKey(id) {
+    return del(`/api/v1/api-keys/keys/${id}/`);
+  },
+  getAnalyticsLogs(params = {}) {
+    const queryParams = new URLSearchParams(params).toString();
+    return get(`/api/v1/api-keys/logs/${queryParams ? '?' + queryParams : ''}`);
+  }
+};
+
 export default {
   regionsAPI,
   alertsAPI,
@@ -212,6 +314,9 @@ export default {
   analyticsAPI,
   geospatialAPI,
   dashboardAPI,
+  usersAPI,
+  mlModelsAPI,
+  apiKeysAPI,
 };
 
 
