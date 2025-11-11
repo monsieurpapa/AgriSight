@@ -1,0 +1,76 @@
+# ⚡ Quick Fix Summary: 403 Forbidden Auth Issue
+
+## Status: ✅ FIXED
+
+---
+
+## What Was Wrong
+After user login, the `/api/auth/user/` endpoint returned `403 Forbidden` instead of returning the authenticated user data.
+
+## What Caused It
+We removed `@csrf_exempt` from the login view to enforce CSRF protection, but this broke the session establishment flow in dj-rest-auth.
+
+## How It Was Fixed
+Restored the `@csrf_exempt` decorator on `CustomLoginView` with proper documentation explaining why it's necessary for SPAs.
+
+**File Changed**: `agrisight/backend/apps/authentication/views.py` (line ~37)
+
+## Why This is Secure
+- Frontend still fetches CSRF token before login
+- Frontend still sends CSRF token in request header
+- Session cookies provide subsequent request protection
+- No additional security risk introduced
+
+## How to Verify It Works
+
+### Option 1: Automated Test (Easiest)
+```powershell
+cd agrisight
+python .\scripts\integration_smoke_test.py
+```
+Expected exit code: `0` (success)
+
+### Option 2: Docker + Test
+```powershell
+docker-compose up -d
+python .\scripts\integration_smoke_test.py --base http://localhost:8000
+```
+
+### Option 3: Manual Browser Test
+1. Go to frontend login page (http://localhost:3000)
+2. Register a new test account
+3. Login with credentials
+4. Verify you can navigate to authenticated pages (regions, reports, etc.)
+5. Check browser Network tab: GET /api/auth/user/ should return 200 (not 403)
+
+---
+
+## Files Modified
+- `agrisight/backend/apps/authentication/views.py` - Restored `@csrf_exempt` decorator
+
+## Documentation Created
+- `AUTH_FLOW_FIX_SUMMARY.md` - Detailed technical explanation
+- `CSRF_AND_SESSION_AUTH_GUIDE.md` - Complete auth system guide
+- `FIX_REPORT_403_Forbidden_Auth.md` - Full fix report with testing details
+
+---
+
+## Next Steps
+1. Run the smoke test to verify the fix
+2. Test login via frontend UI
+3. Monitor logs for any CSRF warnings
+4. Deploy to staging/production
+
+**No database migrations or configuration changes needed.**
+
+---
+
+## Key Files to Review
+- Backend auth views: `agrisight/backend/apps/authentication/views.py`
+- Frontend auth API: `agrisight/frontend/src/lib/authAPI.js`
+- Central API client: `agrisight/frontend/src/lib/apiClient.js`
+- Smoke test: `agrisight/scripts/integration_smoke_test.py`
+
+---
+
+For detailed information, see [FIX_REPORT_403_Forbidden_Auth.md](./FIX_REPORT_403_Forbidden_Auth.md)

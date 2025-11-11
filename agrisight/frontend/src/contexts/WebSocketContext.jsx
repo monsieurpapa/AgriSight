@@ -27,12 +27,17 @@ export const WebSocketProvider = ({ children }) => {
       .replace('http://', 'ws://')
       .replace('https://', 'wss://') + '/ws/';
 
-  const { isConnected, error, sendMessage, lastMessage } = useWebSocket(wsUrl, {
-    authToken: user?.sessionid, // Use session ID for authentication
-    onMessage: handleWebSocketMessage,
-    maxReconnectAttempts: 5,
-    reconnectInterval: 3000
-  });
+  // Only connect WebSocket if authenticated
+  const { isConnected, error, sendMessage, lastMessage } = useWebSocket(
+    isAuthenticated ? wsUrl : null,
+    {
+      authToken: user?.sessionid, // Use session ID for authentication
+      onMessage: handleWebSocketMessage,
+      maxReconnectAttempts: 5,
+      reconnectInterval: 3000,
+      shouldConnect: isAuthenticated // Only connect when authenticated
+    }
+  );
 
   function handleWebSocketMessage(data) {
     console.log('WebSocket message received:', data);

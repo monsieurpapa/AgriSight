@@ -4,21 +4,26 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies for GeoDjango and GDAL
-RUN apt-get update && apt-get install -y \
-    binutils \
-    libproj-dev \
-    gdal-bin \
-    libgdal-dev \
-    python3-gdal \
-    libgeos-dev \
-    libspatialite-dev \
-    spatialite-bin \
-    libsqlite3-mod-spatialite \
-    postgresql-client \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+## Install system dependencies for GeoDjango and GDAL
+## Use noninteractive frontend and --no-install-recommends to reduce memory/disk pressure
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       ca-certificates \
+       binutils \
+       libproj-dev \
+       gdal-bin \
+       libgdal-dev \
+       python3-gdal \
+       libgeos-dev \
+       libspatialite-dev \
+       spatialite-bin \
+       libsqlite3-mod-spatialite \
+       postgresql-client \
+       gcc \
+       g++ \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Set GDAL environment variables
 ENV GDAL_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/libgdal.so

@@ -49,7 +49,7 @@ http.interceptors.request.use(
   }
 );
 
-// Response interceptor with comprehensive error handling
+// Response interceptor with comprehensive error handling and retry logic
 http.interceptors.response.use(
   (response) => {
     // Log successful requests in development
@@ -61,12 +61,24 @@ http.interceptors.response.use(
   },
   async (error) => {
     const apiError = createAPIError(error);
-    
+    const originalRequest = error.config;
+
+    // Initialize retry metadata if not present
+    if (!originalRequest._retryMetadata) {
+      originalRequest._retryMetadata = {
+        count: 0,
+        maxRetries: 3, // Maximum retry attempts
+        retryableStatuses: [408, 429, 500, 502, 503, 504], // Retry on these statuses
+      };
+    }
+
     // Handle CSRF token refresh on 403 responses
-    if (error.response?.status === 403 && error.response?.data?.detail?.includes('CSRF')) {
-      const originalRequest = error.config;
-      if (!originalRequest._retry) {
-        originalRequest._retry = true;
+    if (
+      error.response?.status === 403 &&
+      error.response?.data?.detail?.includes('CSRF')
+    ) {
+      if (!originalRequest._csrfRetry) {
+        originalRequest._csrfRetry = true;
         csrfToken = null;
         const token = await getCsrfToken();
         if (token) {
@@ -75,23 +87,46 @@ http.interceptors.response.use(
         }
       }
     }
-    
+
+    // Handle retryable errors with exponential backoff
+    const shouldRetry =
+      originalRequest._retryMetadata.retryableStatuses.includes(error.response?.status) &&
+      originalRequest._retryMetadata.count < originalRequest._retryMetadata.maxRetries &&
+      originalRequest.method !== 'get'; // Don't retry GET requests automatically (idempotent)
+
+    if (shouldRetry) {
+      originalRequest._retryMetadata.count += 1;
+      const retryDelay = Math.pow(2, originalRequest._retryMetadata.count - 1) * 1000; // Exponential backoff
+      
+      console.warn(
+        `🔄 Retrying request (attempt ${originalRequest._retryMetadata.count}/${originalRequest._retryMetadata.maxRetries}) after ${retryDelay}ms`
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      return http(originalRequest);
+    }
+
     // Handle 401 errors (authentication required)
     if (error.response?.status === 401) {
       // Clear any stored authentication data
       csrfToken = null;
-      
+
       // Redirect to login if not already there
-      if (window.location.pathname !== '/login') {
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
-    
+
     // Log errors in development
     if (process.env.NODE_ENV === 'development') {
       console.error('❌ API Error:', apiError);
+      if (originalRequest._retryMetadata.count > 0) {
+        console.info(
+          `Retry attempts: ${originalRequest._retryMetadata.count}/${originalRequest._retryMetadata.maxRetries}`
+        );
+      }
     }
-    
+
     return Promise.reject(apiError);
   }
 );

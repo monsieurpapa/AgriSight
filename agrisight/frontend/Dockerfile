@@ -10,7 +10,11 @@ COPY package*.json pnpm-lock.yaml ./
 
 # Install pnpm and dependencies
 RUN npm install -g pnpm
-RUN pnpm install --frozen-lockfile
+## The lockfile in the repo may be out-of-date with package.json (dev workflow or intentional pinning).
+## Using --no-frozen-lockfile here allows the container build to succeed and regenerate/install
+## packages according to package.json. In CI you may want to keep --frozen-lockfile and
+## ensure pnpm-lock.yaml is kept in sync.
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source code
 COPY . .

@@ -1,8 +1,12 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { setupGlobalErrorHandlers } from './lib/errorLogger';
+import { initWebVitals } from './lib/performanceMonitor';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
+import { ErrorProvider } from './contexts/ErrorContext';
+import { ErrorNotificationStack } from './components/error/ErrorNotification';
 import ErrorBoundary from './components/error/ErrorBoundary';
 import ErrorPage from './components/error/ErrorPage';
 import Layout from './components/layout/Layout';
@@ -98,13 +102,21 @@ const Fallback = () => (
 );
 
 function App() {
+  // Initialize error logging and handlers
+  React.useEffect(() => {
+    setupGlobalErrorHandlers();
+    initWebVitals(); // Initialize performance monitoring
+  }, []);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <WebSocketProvider>
-            <Router>
-            <div className="App">
+            <ErrorProvider>
+              <Router>
+                <ErrorNotificationStack />
+                <div className="App">
               <Routes>
             {/* Public routes */}
             <Route path="/landing" element={<Landing />} />
@@ -245,9 +257,10 @@ function App() {
             </Routes>
           </div>
           </Router>
-        </WebSocketProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+            </ErrorProvider>
+          </WebSocketProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }

@@ -9,8 +9,15 @@ const useWebSocket = (url, options = {}) => {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = options.maxReconnectAttempts || 5;
   const reconnectInterval = options.reconnectInterval || 3000;
+  const shouldConnect = options.shouldConnect !== false; // Default to true if not specified
 
   const connect = useCallback(() => {
+    // Don't connect if url is null or shouldConnect is false
+    if (!url || !shouldConnect) {
+      console.log('WebSocket connection skipped - url:', !!url, 'shouldConnect:', shouldConnect);
+      return;
+    }
+
     try {
       const ws = new WebSocket(url);
       
@@ -47,8 +54,8 @@ const useWebSocket = (url, options = {}) => {
         console.log('WebSocket disconnected:', event.code, event.reason);
         setIsConnected(false);
         
-        // Attempt to reconnect if not a normal closure
-        if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
+        // Attempt to reconnect if not a normal closure and should connect
+        if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts && shouldConnect) {
           reconnectAttempts.current += 1;
           console.log(`Attempting to reconnect (${reconnectAttempts.current}/${maxReconnectAttempts})...`);
           
@@ -58,9 +65,10 @@ const useWebSocket = (url, options = {}) => {
         }
       };
 
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+      ws.onerror = (event) => {
+        console.error('WebSocket error:', event);
         setError('WebSocket connection error');
+        // Don't throw - allow the hook to handle gracefully
       };
 
       setSocket(ws);
@@ -68,7 +76,7 @@ const useWebSocket = (url, options = {}) => {
       console.error('Failed to create WebSocket connection:', err);
       setError('Failed to create WebSocket connection');
     }
-  }, [url, options]);
+  }, [url, shouldConnect, options]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -92,12 +100,14 @@ const useWebSocket = (url, options = {}) => {
   }, [socket, isConnected]);
 
   useEffect(() => {
-    connect();
+    if (shouldConnect && url) {
+      connect();
+    }
     
     return () => {
       disconnect();
     };
-  }, [connect, disconnect]);
+  }, [shouldConnect, url, connect, disconnect]);
 
   return {
     socket,

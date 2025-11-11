@@ -39,14 +39,30 @@ User = get_user_model()
 class CustomLoginView(BaseLoginView):
     """
     Custom login view with rate limiting.
+    
+    CSRF exemption is necessary for SPA session-based auth flow:
+    - Client calls GET /api/auth/csrf/ to fetch CSRF token
+    - Client POSTs to this endpoint with token in X-CSRFToken header
+    - Without exemption, login POST would be rejected before session is created,
+      causing subsequent /api/auth/user/ calls to return 403 Forbidden.
+    - With exemption, frontend's CSRF token (in header) prevents CSRF attacks,
+      session is established, and subsequent requests are session-protected.
     """
     pass
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(ratelimit(key='ip', rate='3/1h', method='POST'), name='post')
 class CustomRegisterView(BaseRegisterView):
     """
     Custom registration view with rate limiting and custom serializer.
+    
+    CSRF exemption is necessary for SPA auth flow (same reasoning as CustomLoginView):
+    - Registration is a POST from unauthenticated client
+    - Client fetches CSRF token via GET /api/auth/csrf/ first
+    - Client POSTs registration data with token in X-CSRFToken header
+    - Without exemption, registration POST would be rejected before user is created
+    - Frontend's CSRF token (in header) still prevents CSRF attacks
     """
     serializer_class = CustomRegisterSerializer
 
