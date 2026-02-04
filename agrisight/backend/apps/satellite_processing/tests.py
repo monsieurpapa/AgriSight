@@ -459,6 +459,165 @@ class SatelliteProcessingViewsTest(TestCase):
         self.assertIn('region_statistics', data)
         self.assertGreater(data['overview']['total_regions'], 0)
 
+    def test_processing_statistics_scoped_to_organization(self):
+        """Test processing statistics are scoped to organization."""
+        from django.test import Client
+
+        org_a = Organization.objects.create(
+            name='Org A',
+            organization_type='humanitarian',
+            contact_email='a@example.com'
+        )
+        org_b = Organization.objects.create(
+            name='Org B',
+            organization_type='cooperative',
+            contact_email='b@example.com'
+        )
+
+        user = User.objects.create_user(
+            username='orguser',
+            email='orguser@example.com',
+            password='testpass123',
+            user_type='humanitarian',
+            organization=org_a
+        )
+
+        region_a = Region.objects.create(
+            name='Region A',
+            country='DRC',
+            province='North Kivu',
+            geometry='MULTIPOLYGON(((28.5 -1.5, 30.0 -1.5, 30.0 0.5, 28.5 0.5, 28.5 -1.5)))'
+        )
+        region_b = Region.objects.create(
+            name='Region B',
+            country='DRC',
+            province='South Kivu',
+            geometry='MULTIPOLYGON(((28.5 -1.5, 30.0 -1.5, 30.0 0.5, 28.5 0.5, 28.5 -1.5)))'
+        )
+
+        region_a.organizations.add(org_a)
+        region_b.organizations.add(org_b)
+
+        SatelliteImage.objects.create(
+            region=region_a,
+            acquisition_date=timezone.now(),
+            satellite_name='Sentinel-2',
+            cloud_cover_percentage=10.0,
+            resolution_meters=10.0,
+            bands_available=['B02', 'B03', 'B04', 'B08'],
+            image_path='/test/path_a.tif',
+            is_processed=True
+        )
+        SatelliteImage.objects.create(
+            region=region_b,
+            acquisition_date=timezone.now(),
+            satellite_name='Sentinel-2',
+            cloud_cover_percentage=10.0,
+            resolution_meters=10.0,
+            bands_available=['B02', 'B03', 'B04', 'B08'],
+            image_path='/test/path_b.tif',
+            is_processed=True
+        )
+
+        client = Client()
+        client.force_login(user)
+
+        response = client.get('/api/v1/satellite-processing/statistics/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['overview']['total_regions'], 1)
+        self.assertEqual(len(data['region_statistics']), 1)
+
+    def test_trend_analysis_scoped_to_region(self):
+        """Test trend analysis respects region access."""
+        from django.test import Client
+
+        org_a = Organization.objects.create(
+            name='Org A',
+            organization_type='humanitarian',
+            contact_email='a@example.com'
+        )
+        org_b = Organization.objects.create(
+            name='Org B',
+            organization_type='cooperative',
+            contact_email='b@example.com'
+        )
+
+        user = User.objects.create_user(
+            username='orguser',
+            email='orguser@example.com',
+            password='testpass123',
+            user_type='humanitarian',
+            organization=org_a
+        )
+
+        region_a = Region.objects.create(
+            name='Region A',
+            country='DRC',
+            province='North Kivu',
+            geometry='MULTIPOLYGON(((28.5 -1.5, 30.0 -1.5, 30.0 0.5, 28.5 0.5, 28.5 -1.5)))'
+        )
+        region_b = Region.objects.create(
+            name='Region B',
+            country='DRC',
+            province='South Kivu',
+            geometry='MULTIPOLYGON(((28.5 -1.5, 30.0 -1.5, 30.0 0.5, 28.5 0.5, 28.5 -1.5)))'
+        )
+
+        region_a.organizations.add(org_a)
+        region_b.organizations.add(org_b)
+
+        image_a = SatelliteImage.objects.create(
+            region=region_a,
+            acquisition_date=timezone.now() - timedelta(days=2),
+            satellite_name='Sentinel-2',
+            cloud_cover_percentage=10.0,
+            resolution_meters=10.0,
+            bands_available=['B02', 'B03', 'B04', 'B08'],
+            image_path='/test/path_a.tif',
+            is_processed=True
+        )
+        VegetationIndex.objects.create(
+            satellite_image=image_a,
+            index_type='NDVI',
+            mean_value=0.65,
+            min_value=0.2,
+            max_value=0.9,
+            std_deviation=0.15,
+            raster_path='/test/ndvi_a.tif'
+        )
+
+        image_b = SatelliteImage.objects.create(
+            region=region_b,
+            acquisition_date=timezone.now() - timedelta(days=2),
+            satellite_name='Sentinel-2',
+            cloud_cover_percentage=10.0,
+            resolution_meters=10.0,
+            bands_available=['B02', 'B03', 'B04', 'B08'],
+            image_path='/test/path_b.tif',
+            is_processed=True
+        )
+        VegetationIndex.objects.create(
+            satellite_image=image_b,
+            index_type='NDVI',
+            mean_value=0.55,
+            min_value=0.2,
+            max_value=0.9,
+            std_deviation=0.15,
+            raster_path='/test/ndvi_b.tif'
+        )
+
+        client = Client()
+        client.force_login(user)
+
+        response = client.get(f'/api/v1/satellite-processing/trend-analysis/?days=30&region_id={region_a.id}')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(len(data) >= 1)
+
+        forbidden = client.get(f'/api/v1/satellite-processing/trend-analysis/?days=30&region_id={region_b.id}')
+        self.assertEqual(forbidden.status_code, 403)
+
 
 @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
 class SatelliteProcessingIntegrationTest(TestCase):

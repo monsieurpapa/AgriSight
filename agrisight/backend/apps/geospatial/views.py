@@ -1,9 +1,11 @@
 from rest_framework import generics, permissions
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import Distance
+from django.db.models import Avg
 from apps.authentication.permissions import (
     CanViewData, CanManageRegions, CanViewAllRegions, CanManageOrganizations,
     user_has_permission
@@ -37,7 +39,7 @@ class RegionListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         # Only users with manage_regions permission can create regions
         if not user_has_permission(self.request.user, 'manage_regions'):
-            raise permissions.PermissionDenied("You don't have permission to create regions.")
+            raise PermissionDenied("You don't have permission to create regions.")
         serializer.save()
 
 
@@ -240,3 +242,38 @@ def regions_near_point(request):
     except (ValueError, TypeError):
         return Response({'error': 'Invalid coordinates or distance'}, status=400)
 
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def data_quality_summary(request):
+    """Return data quality and completeness summary for accessible regions."""
+    user = request.user
+    if user.user_type == 'admin':
+        accessible_regions = Region.objects.all()
+    elif user.organization:
+        accessible_regions = Region.objects.filter(organizations=user.organization)
+    else:
+        accessible_regions = Region.objects.none()
+
+    satellite_images = SatelliteImage.objects.filter(region__in=accessible_regions)
+    vegetation_indices = VegetationIndex.objects.filter(
+        satellite_image__region__in=accessible_regions
+    )
+
+    latest_image = satellite_images.order_by('-acquisition_date').first()
+    avg_cloud_cover = satellite_images.aggregate(avg=Avg('cloud_cover_percentage')).get('avg') or 0
+
+    return Response({
+        'regions': {
+            'total': accessible_regions.count()
+        },
+        'satellite_images': {
+            'total': satellite_images.count(),
+            'unprocessed': satellite_images.filter(is_processed=False).count(),
+            'avg_cloud_cover': round(avg_cloud_cover, 2),
+            'latest_acquisition': latest_image.acquisition_date.isoformat() if latest_image else None
+        },
+        'vegetation_indices': {
+            'total': vegetation_indices.count()
+        }
+    })

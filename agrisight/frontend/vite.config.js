@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -28,7 +32,7 @@ export default defineConfig({
     // Production build configuration
     outDir: 'dist',
     assetsDir: 'assets',
-    
+
     // Code splitting configuration
     rollupOptions: {
       output: {
@@ -42,42 +46,33 @@ export default defineConfig({
         },
       },
     },
-    
+
     // Optimize build performance
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true, // Remove console.log in production
-        passes: 2,
-      },
-      format: {
-        comments: false, // Remove comments
-      },
-    },
-    
+    minify: false, // Disable minification to debug build failure
+
     // CSS code splitting
     cssCodeSplit: true,
-    
+
     // Source maps for production (disable for smaller bundle)
     sourcemap: false,
-    
+
     // Chunk size warnings
     chunkSizeWarningLimit: 1000,
-    
+
     // Module preload polyfill
     modulePreload: {
       polyfill: true,
     },
-    
+
     // Report compressed size
     reportCompressedSize: true,
-    
+
     // CommonJS options
     commonjsOptions: {
       transformMixedEsModules: true,
     },
   },
-  
+
   // Optimize dependencies
   optimizeDeps: {
     include: [
@@ -90,9 +85,6 @@ export default defineConfig({
     ],
     exclude: [],
   },
-  
-  // Performance hints
-  define: {
-    __DEV__: `JSON.stringify(${process.env.NODE_ENV === 'development'})`,
-  },
+
+  // Define removed - was causing esbuild error with JSON.stringify
 })

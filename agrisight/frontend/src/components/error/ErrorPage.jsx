@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ErrorPage = ({ 
   status = 500, 
@@ -24,6 +25,7 @@ const ErrorPage = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, getDefaultPath } = useAuth();
 
   const getErrorConfig = (status) => {
     switch (status) {
@@ -119,14 +121,16 @@ const ErrorPage = ({
   };
 
   const handleGoHome = () => {
-    navigate('/');
+    const homePath = isAuthenticated ? getDefaultPath() : '/landing';
+    navigate(homePath);
   };
 
   const handleGoBack = () => {
     if (window.history.length > 1) {
       navigate(-1);
     } else {
-      navigate('/');
+      const homePath = isAuthenticated ? getDefaultPath() : '/landing';
+      navigate(homePath);
     }
   };
 
@@ -172,7 +176,7 @@ const ErrorPage = ({
             </Button>
           </div>
           
-          {process.env.NODE_ENV === 'development' && (
+          {import.meta.env.DEV && (
             <div className="mt-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
               <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
                 Debug Information:

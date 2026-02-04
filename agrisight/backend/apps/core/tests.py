@@ -2,10 +2,10 @@
 Comprehensive tests for core middleware and utilities.
 """
 
-from django.test import TestCase, RequestFactory
+from django.test import TestCase, RequestFactory, Client
 from django.contrib.auth import get_user_model
 from django.http import HttpResponse
-from django.core.exceptions import ValidationError, PermissionError
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import DatabaseError
 from unittest.mock import patch, MagicMock
 import json
@@ -68,7 +68,7 @@ class ErrorHandlingMiddlewareTest(TestCase):
         request = self.factory.get('/api/test/')
         request.user = self.user
         
-        exception = PermissionError('Test permission error')
+        exception = PermissionDenied('Test permission error')
         
         response = self.middleware.process_exception(request, exception)
         
@@ -158,8 +158,9 @@ class RateLimitMiddlewareTest(TestCase):
         request = self.factory.get('/api/test/')
         
         # Simulate many requests
+        now = __import__('time').time()
         for _ in range(101):  # Exceed the limit of 100
-            self.middleware.requests.setdefault('127.0.0.1', []).append(0)
+            self.middleware.requests.setdefault('127.0.0.1', []).append(now)
         
         response = self.middleware.process_request(request)
         
@@ -229,6 +230,57 @@ class HealthCheckMiddlewareTest(TestCase):
         self.assertEqual(data['services']['database'], 'unhealthy')
 
 
+class HealthCheckViewTest(TestCase):
+    """Test health check API views with admin gating."""
+
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_user(
+            username='adminuser',
+            email='admin@example.com',
+            password='testpass123',
+            user_type='admin'
+        )
+        self.user = User.objects.create_user(
+            username='regularuser',
+            email='user@example.com',
+            password='testpass123',
+            user_type='humanitarian'
+        )
+
+    @patch('apps.core.views.cache')
+    @patch('apps.core.views.connection')
+    def test_health_check_admin_only(self, mock_connection, mock_cache):
+        mock_connection.cursor.return_value.__enter__.return_value.execute.return_value = None
+        mock_cache.set.return_value = True
+        mock_cache.get.return_value = 'ok'
+
+        self.client.force_login(self.user)
+        forbidden = self.client.get('/api/health/')
+        self.assertEqual(forbidden.status_code, 403)
+
+        self.client.force_login(self.admin)
+        response = self.client.get('/api/health/')
+        self.assertEqual(response.status_code, 200)
+
+    @patch('apps.core.views.cache')
+    @patch('apps.core.views.connection')
+    @patch('apps.core.views.current_app')
+    def test_health_check_detailed_admin_only(self, mock_celery, mock_connection, mock_cache):
+        mock_connection.cursor.return_value.__enter__.return_value.execute.return_value = None
+        mock_cache.set.return_value = True
+        mock_cache.get.return_value = 'ok'
+        mock_celery.control.inspect.return_value.stats.return_value = {}
+
+        self.client.force_login(self.user)
+        forbidden = self.client.get('/api/health/detailed/')
+        self.assertEqual(forbidden.status_code, 403)
+
+        self.client.force_login(self.admin)
+        response = self.client.get('/api/health/detailed/')
+        self.assertEqual(response.status_code, 200)
+
+
 class APIVersionMiddlewareTest(TestCase):
     """Test API versioning middleware."""
     
@@ -290,7 +342,7 @@ class RequestLoggingMiddlewareTest(TestCase):
         mock_logger.info.assert_called()
         
         # Check that start time was set
-        self.assertHasAttr(request, '_start_time')
+        assertHasAttr(request, '_start_time')
     
     @patch('apps.core.middleware.logger')
     def test_response_logging(self, mock_logger):

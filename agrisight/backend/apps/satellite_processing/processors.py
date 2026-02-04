@@ -28,7 +28,7 @@ class SatelliteDataProcessor:
     """
     
     def __init__(self):
-        self.sentinel_client = SentinelHubClient()
+        self.sentinel_client = None
         self.temp_dir = '/tmp/agrisight_processing'
         os.makedirs(self.temp_dir, exist_ok=True)
     
@@ -52,7 +52,7 @@ class SatelliteDataProcessor:
             satellite_data = self._fetch_sentinel_data(region, start_date, end_date)
             
             if not satellite_data:
-                return {'error': 'No satellite data available for the specified period'}
+                return {'error': 'No satellite data available for the specified period', 'success': False}
             
             # Process each satellite image
             processing_results = []
@@ -86,9 +86,36 @@ class SatelliteDataProcessor:
         Fetch satellite data from Sentinel Hub for the specified region and time period.
         """
         try:
+            if self.sentinel_client is None:
+                self.sentinel_client = SentinelHubClient()
+
             # Convert region geometry to bounding box
             bbox = self._geometry_to_bbox(region.geometry)
             time_range = (start_date, end_date)
+
+            if settings.DEBUG and (
+                not getattr(self.sentinel_client, 'client_id', None)
+                or not getattr(self.sentinel_client, 'client_secret', None)
+            ):
+                dummy_file = f"{self.temp_dir}/{region.id}_ndvi_dummy.tif"
+                with open(dummy_file, 'wb') as f:
+                    f.write(b'')
+                satellite_image = SatelliteImage.objects.create(
+                    region=region,
+                    acquisition_date=datetime.now(),
+                    satellite_name='Sentinel-2',
+                    cloud_cover_percentage=0.0,
+                    resolution_meters=10.0,
+                    bands_available=['B04', 'B08'],
+                    image_path=dummy_file,
+                    processing_notes='Generated dummy data (missing Sentinel credentials)'
+                )
+                return [{
+                    'satellite_image': satellite_image,
+                    'vegetation_files': {'ndvi': dummy_file},
+                    'bbox': bbox,
+                    'acquisition_date': satellite_image.acquisition_date
+                }]
             
             # Get true color preview first
             preview_response = self.sentinel_client.get_true_color_image(
@@ -143,12 +170,7 @@ class SatelliteDataProcessor:
                 resolution_meters=10.0,
                 bands_available=['B02', 'B03', 'B04', 'B08', 'B11', 'B12'],
                 image_path=f"/data/satellite/{region.id}/{datetime.now().strftime('%Y%m%d_%H%M%S')}.tif",
-                metadata={
-                    'bbox': bbox,
-                    'time_range': time_range,
-                    'indices_available': list(vegetation_data.keys()),
-                    'processing_timestamp': datetime.now().isoformat()
-                }
+                processing_notes=f"Indices: {', '.join(vegetation_data.keys())}"
             )
             
             return [{
@@ -219,9 +241,11 @@ class SatelliteDataProcessor:
         try:
             with rasterio.open(file_path) as src:
                 data = src.read(1, masked=True)
-                
-                # Remove masked values
-                valid_data = data.compressed()
+
+                if hasattr(data, 'compressed'):
+                    valid_data = data.compressed()
+                else:
+                    valid_data = np.asarray(data).ravel()
                 
                 if len(valid_data) == 0:
                     return {'mean': 0.0, 'min': 0.0, 'max': 0.0, 'std': 0.0}
@@ -392,7 +416,10 @@ class SatelliteDataProcessor:
         Convert Django geometry to bounding box format [min_lon, min_lat, max_lon, max_lat].
         """
         try:
-            bounds = geometry.bounds
+            if hasattr(geometry, 'extent'):
+                bounds = geometry.extent
+            else:
+                bounds = geometry.bounds
             return [bounds[0], bounds[1], bounds[2], bounds[3]]
         except Exception as e:
             logger.error(f"Error converting geometry to bbox: {str(e)}")

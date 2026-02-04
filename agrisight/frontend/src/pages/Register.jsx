@@ -24,15 +24,15 @@ const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   
-  const { register, isAuthenticated, error, clearError } = useAuth();
+  const { register, isAuthenticated, error, clearError, authConfig, getDefaultPath } = useAuth();
   const navigate = useNavigate();
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/', { replace: true });
+      navigate(getDefaultPath(), { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, getDefaultPath]);
 
   // Clear error when component mounts
   useEffect(() => {
@@ -96,6 +96,20 @@ const Register = () => {
     formData.password1 === formData.password2;
 
   const passwordsMatch = formData.password1 === formData.password2;
+  const passwordRules = authConfig?.password_requirements || {
+    min_length: 8,
+    require_uppercase: true,
+    require_lowercase: true,
+    require_numbers: true,
+    require_symbols: false,
+  };
+
+  const passwordChecks = [
+    { key: 'min_length', label: `At least ${passwordRules.min_length} characters`, ok: (formData.password1 || '').length >= passwordRules.min_length },
+    { key: 'require_uppercase', label: 'One uppercase letter', ok: /[A-Z]/.test(formData.password1 || '') },
+    { key: 'require_lowercase', label: 'One lowercase letter', ok: /[a-z]/.test(formData.password1 || '') },
+    { key: 'require_numbers', label: 'One number', ok: /[0-9]/.test(formData.password1 || '') },
+  ].filter(rule => passwordRules[rule.key] !== false);
 
   if (registrationSuccess) {
     return (
@@ -256,6 +270,18 @@ const Register = () => {
                       <Eye className="h-4 w-4" />
                     )}
                   </Button>
+                </div>
+                <div className="mt-2 space-y-1">
+                  {passwordChecks.map((rule) => (
+                    <div key={rule.label} className="flex items-center gap-2 text-xs">
+                      <span className={rule.ok ? 'text-green-600' : 'text-gray-500'}>
+                        {rule.ok ? '✓' : '•'}
+                      </span>
+                      <span className={rule.ok ? 'text-green-700' : 'text-gray-600'}>
+                        {rule.label}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
 

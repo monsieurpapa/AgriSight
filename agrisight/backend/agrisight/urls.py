@@ -3,6 +3,7 @@ URL configuration for AgriSight project.
 """
 from django.contrib import admin
 from django.urls import path, include
+from apps.authentication.views import password_reset_confirm_stub
 from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
@@ -27,11 +28,13 @@ urlpatterns = [
     path('api/v1/api-keys/', include('apps.api_keys_logs.urls')),
     path('api/v1/satellite-processing/', include('apps.satellite_processing.urls')),
     path('api/v1/ml-models/', include('apps.ml_models.urls')),
+    path('api/satellite-processing/', include(('apps.satellite_processing.urls', 'satellite_processing'), namespace='satellite_processing_unversioned')),
     
     # API documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path('auth/password-reset/<uidb64>/<token>/', password_reset_confirm_stub, name='password_reset_confirm'),
 ]
 
 # Serve media files in development

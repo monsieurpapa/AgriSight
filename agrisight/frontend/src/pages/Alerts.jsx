@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { alertsAPI, analyticsAPI, satelliteProcessingAPI } from '../lib/api';
+import { alertsAPI } from '../lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -55,18 +55,16 @@ const Alerts = () => {
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
-  // Real-time system health monitoring
+  // Real-time system health monitoring (UI placeholder)
   useEffect(() => {
     const updateSystemHealth = () => {
       setSystemHealth(prev => ({
         ...prev,
-        lastUpdate: new Date().toISOString(),
-        activeConnections: Math.floor(Math.random() * 20) + 40, // Simulate connection count
-        responseTime: `${Math.floor(Math.random() * 50) + 100}ms` // Simulate response time
+        lastUpdate: new Date().toISOString()
       }));
     };
 
-    const interval = setInterval(updateSystemHealth, 10000); // Update every 10 seconds
+    const interval = setInterval(updateSystemHealth, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -81,9 +79,22 @@ const Alerts = () => {
     }
   }, [notifications, alertSettings.soundEnabled]);
 
-  const handleMarkAsRead = (alertId) => {
-    // In a real app, this would call an API to mark the alert as read
-    console.log('Marking alert as read:', alertId);
+  const handleMarkAsRead = async (alertId) => {
+    try {
+      await alertsAPI.markAlertAsRead(alertId);
+      refetch();
+    } catch (err) {
+      console.error('Failed to mark alert as read:', err);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await alertsAPI.markAllAlertsAsRead();
+      refetch();
+    } catch (err) {
+      console.error('Failed to mark all alerts as read:', err);
+    }
   };
 
   const handleAlertSettingsChange = (setting, value) => {
@@ -93,7 +104,7 @@ const Alerts = () => {
     }));
   };
 
-  const getAlertIcon = (type, severity) => {
+  const getAlertIcon = (type) => {
     switch (type) {
       case 'stress':
         return <AlertTriangle className="h-4 w-4 text-red-600" />;
@@ -110,16 +121,24 @@ const Alerts = () => {
 
   const getSeverityColor = (severity) => {
     switch (severity) {
-      case 'high':
+      case 'critical':
         return 'border-red-500 text-red-700 bg-red-50 dark:bg-red-900/10';
-      case 'medium':
+      case 'warning':
         return 'border-yellow-500 text-yellow-700 bg-yellow-50 dark:bg-yellow-900/10';
-      case 'low':
+      case 'info':
         return 'border-green-500 text-green-700 bg-green-50 dark:bg-green-900/10';
       default:
         return 'border-gray-500 text-gray-700 bg-gray-50 dark:bg-gray-900/10';
     }
   };
+
+  const filteredAlerts = (data?.results || []).filter((alert) => {
+    if (alertSettings.severityFilter === 'all') return true;
+    if (alertSettings.severityFilter === 'high') return alert.severity === 'critical';
+    if (alertSettings.severityFilter === 'medium') return ['critical', 'warning'].includes(alert.severity);
+    if (alertSettings.severityFilter === 'low') return true;
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -141,6 +160,10 @@ const Alerts = () => {
           <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCcw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`}/>
             Refresh
+          </Button>
+          <Button variant="outline" onClick={handleMarkAllRead}>
+            <Check className="h-4 w-4 mr-2"/>
+            Mark All Read
           </Button>
           <Button variant="outline">
             <Download className="h-4 w-4 mr-2"/>
@@ -225,7 +248,7 @@ const Alerts = () => {
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Active Alerts</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {data?.results?.length || 0} active alerts requiring attention
+                {filteredAlerts.length} active alerts requiring attention
               </p>
             </div>
             <div className="flex gap-2">
@@ -255,18 +278,18 @@ const Alerts = () => {
                   <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
                   Failed to load alerts. Please try again.
                 </div>
-              ) : data?.results?.length ? (
+              ) : filteredAlerts.length ? (
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {data.results.map((alert) => (
+                  {filteredAlerts.map((alert) => (
                     <div key={alert.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3 flex-1">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            alert.severity === 'high' ? 'bg-red-100 dark:bg-red-900/20' :
-                            alert.severity === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/20' :
+                            alert.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/20' :
+                            alert.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900/20' :
                             'bg-green-100 dark:bg-green-900/20'
                           }`}>
-                            {getAlertIcon(alert.type || 'system', alert.severity)}
+                            {getAlertIcon(alert.alert_type || 'system')}
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -285,10 +308,10 @@ const Alerts = () => {
                                 <Clock className="h-3 w-3" />
                                 {formatRelativeTime(alert.created_at || alert.timestamp)}
                               </span>
-                              {alert.region && (
+                              {alert.region_names?.length > 0 && (
                                 <span className="flex items-center gap-1">
                                   <MapPin className="h-3 w-3" />
-                                  {alert.region.name}
+                                  {alert.region_names.join(', ')}
                                 </span>
                               )}
                             </div>

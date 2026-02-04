@@ -22,16 +22,23 @@ export const WebSocketProvider = ({ children }) => {
   });
 
   // WebSocket URL - adjust based on environment
-  const wsUrl = import.meta.env.VITE_WS_URL || 
-    (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000')
-      .replace('http://', 'ws://')
-      .replace('https://', 'wss://') + '/ws/';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+  let wsUrl = import.meta.env.VITE_WS_URL;
+
+  if (!wsUrl) {
+    if (apiBaseUrl && apiBaseUrl.startsWith('http')) {
+      wsUrl = apiBaseUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/';
+    } else if (typeof window !== 'undefined') {
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      wsUrl = `${protocol}://${window.location.host}/ws/`;
+    }
+  }
 
   // Only connect WebSocket if authenticated
   const { isConnected, error, sendMessage, lastMessage } = useWebSocket(
     isAuthenticated ? wsUrl : null,
     {
-      authToken: user?.sessionid, // Use session ID for authentication
+      authToken: null, // Session cookies are used via AuthMiddlewareStack
       onMessage: handleWebSocketMessage,
       maxReconnectAttempts: 5,
       reconnectInterval: 3000,
@@ -165,7 +172,7 @@ export const WebSocketProvider = ({ children }) => {
     if (isConnected && isAuthenticated) {
       sendMessage({
         type: 'subscribe',
-        channel: 'general_updates'
+        channel: 'system_alerts'
       });
     }
   }, [isConnected, isAuthenticated, sendMessage]);

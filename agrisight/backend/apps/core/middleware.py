@@ -8,9 +8,12 @@ import json
 from django.utils.deprecation import MiddlewareMixin
 from django.http import JsonResponse
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
+from django.db import connection
+from django.core.cache import cache
 from django.db import DatabaseError
 from rest_framework import status
+from celery import current_app
 from rest_framework.response import Response
 import traceback
 
@@ -32,7 +35,7 @@ class ErrorHandlingMiddleware(MiddlewareMixin):
             return self._handle_validation_error(request, exception)
         elif isinstance(exception, DatabaseError):
             return self._handle_database_error(request, exception)
-        elif isinstance(exception, PermissionError):
+        elif isinstance(exception, (PermissionDenied, PermissionError)):
             return self._handle_permission_error(request, exception)
         else:
             return self._handle_generic_error(request, exception)
@@ -333,7 +336,6 @@ class HealthCheckMiddleware(MiddlewareMixin):
     def _check_database(self):
         """Check database connectivity."""
         try:
-            from django.db import connection
             connection.ensure_connection()
             return 'healthy'
         except Exception:
@@ -342,7 +344,6 @@ class HealthCheckMiddleware(MiddlewareMixin):
     def _check_redis(self):
         """Check Redis connectivity."""
         try:
-            from django.core.cache import cache
             cache.set('health_check', 'ok', 10)
             result = cache.get('health_check')
             return 'healthy' if result == 'ok' else 'unhealthy'
@@ -352,7 +353,6 @@ class HealthCheckMiddleware(MiddlewareMixin):
     def _check_celery(self):
         """Check Celery connectivity."""
         try:
-            from celery import current_app
             current_app.control.inspect().stats()
             return 'healthy'
         except Exception:

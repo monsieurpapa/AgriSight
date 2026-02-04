@@ -24,7 +24,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 
 const Header = ({ onMenuToggle, isMobileMenuOpen }) => {
-  const { user, organization, logout } = useAuth();
+  const { user, organization, logout, getUserTypeLabel } = useAuth();
   const navigate = useNavigate();
   const [notificationCount] = useState(3); // Mock notification count
 
@@ -154,7 +154,7 @@ const Header = ({ onMenuToggle, isMobileMenuOpen }) => {
                       {user?.first_name} {user?.last_name}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {user?.role}
+                      {getUserTypeLabel()}
                     </div>
                   </div>
                   <ChevronDown className="h-4 w-4 text-gray-500" />
@@ -195,4 +195,3 @@ const Header = ({ onMenuToggle, isMobileMenuOpen }) => {
 };
 
 export default Header;
-

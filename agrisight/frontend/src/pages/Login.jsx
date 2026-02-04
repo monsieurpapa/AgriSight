@@ -26,7 +26,8 @@ const Login = () => {
     isAuthenticated, 
     error, 
     clearError,
-    authConfig 
+    authConfig,
+    getDefaultPath
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,10 +35,10 @@ const Login = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      const from = location.state?.from?.pathname || '/';
+      const from = location.state?.from?.pathname || getDefaultPath();
       navigate(from, { replace: true });
     }
-  }, [isAuthenticated, navigate, location]);
+  }, [isAuthenticated, navigate, location, getDefaultPath]);
 
   // Clear error when component mounts
   useEffect(() => {
@@ -70,7 +71,7 @@ const Login = () => {
       const result = await login(formData);
       
       if (result.success) {
-        const from = location.state?.from?.pathname || '/';
+        const from = location.state?.from?.pathname || getDefaultPath();
         navigate(from, { replace: true });
       }
     } catch (error) {
@@ -197,6 +198,9 @@ const Login = () => {
                 'Sign In'
               )}
             </Button>
+            <p className="text-xs text-gray-500 text-center">
+              Email verification is required before signing in.
+            </p>
           </form>
 
           {/* Social Login Section */}

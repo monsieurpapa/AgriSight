@@ -34,20 +34,33 @@ class APIKeyListCreateView(generics.ListCreateAPIView):
         else:
             return APIKey.objects.none()
     
-    def perform_create(self, serializer):
-        # Generate API key
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user
+        organization = serializer.validated_data.get('organization')
+        if user.user_type != 'admin':
+            if not user.organization:
+                return Response({'error': 'Organization is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            organization = user.organization
+        if not organization:
+            return Response({'error': 'Organization is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
         api_key = secrets.token_urlsafe(32)
         key_prefix = api_key[:8]
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-        
-        # Save the API key
+
         instance = serializer.save(
+            organization=organization,
             key_prefix=key_prefix,
             key_hash=key_hash
         )
-        
-        # Return the full API key in the response (only time it's shown)
-        instance.full_api_key = api_key
+
+        data = APIKeySerializer(instance).data
+        data['full_api_key'] = api_key
+        headers = self.get_success_headers(data)
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class APIKeyDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -177,4 +190,3 @@ def regenerate_api_key(request, pk):
         
     except APIKey.DoesNotExist:
         return Response({'error': 'API key not found'}, status=status.HTTP_404_NOT_FOUND)
-

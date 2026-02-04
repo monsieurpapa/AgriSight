@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document outlines the comprehensive authentication architecture design for the AgriSight agricultural monitoring platform. After thorough analysis of the existing codebase, we recommend implementing Django-allauth with JWT token-based authentication to provide a robust, scalable, and secure authentication system that supports user registration, login, password reset, email verification, and social authentication capabilities.
+This document outlines the authentication architecture for the AgriSight agricultural monitoring platform. The current implementation uses Django-allauth + dj-rest-auth with session-based authentication and CSRF protection to support user registration, login, password reset, email verification, and social authentication capabilities.
 
 ## Current System Analysis
 
@@ -25,11 +25,11 @@ The AgriSight platform currently operates with the following technology stack:
 - Axios for HTTP requests with React Query for state management
 
 **Current Authentication Setup:**
-The existing system has basic authentication infrastructure with:
+The system has a complete authentication flow with:
 - Custom User model with organization relationships and user type classification
-- Django REST Framework with SessionAuthentication and TokenAuthentication configured
-- CORS headers configured for localhost development
-- No comprehensive authentication flow implemented
+- Django REST Framework with SessionAuthentication configured
+- CSRF protection for state-changing requests
+- Email verification enforced for new registrations
 
 ### Identified Requirements
 
@@ -78,24 +78,22 @@ When choosing between session cookies and API tokens for authentication, several
 - Potential for token bloat with excessive claims
 - Revocation complexity without server-side storage
 
-### Recommended Approach: JWT Token Authentication
+### Recommended Approach: Session-Based Authentication
 
-For the AgriSight platform, we recommend implementing **JWT (JSON Web Token) based authentication** for the following reasons:
+For the AgriSight platform, we implement **session-based authentication** for the following reasons:
 
 1. **API-First Architecture**: The platform follows a decoupled architecture with React frontend consuming Django REST API endpoints
-2. **Scalability**: JWT tokens are stateless and support horizontal scaling
-3. **Mobile Future**: Token-based authentication easily extends to mobile applications
-4. **Cross-Domain Support**: Facilitates potential subdomain or CDN integration
-5. **Modern Standards**: Aligns with contemporary authentication best practices
+2. **Security**: CSRF protection and HttpOnly cookies reduce token handling risk
+3. **Operational Simplicity**: Fewer moving parts for SPA + Django deployments
+4. **Modern Standards**: Aligns with secure session-based SPA patterns
 
 ### Implementation Strategy
 
-We will implement a hybrid approach using Django-allauth with JWT tokens:
+We implement a session-based approach using Django-allauth:
 
 - **Django-allauth** for comprehensive authentication features (registration, social auth, email verification)
-- **JWT tokens** for API authentication with access/refresh token pattern
-- **Secure token storage** using httpOnly cookies for refresh tokens and memory storage for access tokens
-- **Token rotation** for enhanced security
+- **Session cookies** managed by Django
+- **CSRF protection** for all state-changing requests
 
 ## Django-allauth Integration Plan
 
@@ -137,10 +135,9 @@ ACCOUNT_USERNAME_REQUIRED = False
 The authentication system will expose the following RESTful endpoints:
 
 **User Management:**
-- `POST /api/auth/register/` - User registration
+- `POST /api/auth/registration/` - User registration
 - `POST /api/auth/login/` - User login
 - `POST /api/auth/logout/` - User logout
-- `POST /api/auth/refresh/` - Token refresh
 - `GET /api/auth/user/` - Get current user profile
 - `PUT /api/auth/user/` - Update user profile
 
@@ -160,15 +157,14 @@ The authentication system will expose the following RESTful endpoints:
 
 ### Security Implementation
 
-**Token Security:**
-- Access tokens: Short-lived (15 minutes), stored in memory
-- Refresh tokens: Long-lived (7 days), stored in httpOnly cookies
-- Token rotation on refresh for enhanced security
-- Secure token transmission over HTTPS only
+**Session Security:**
+- Session cookies with HttpOnly and Secure flags (production)
+- CSRF protection on all state-changing requests
+- Secure transmission over HTTPS only
 
 **Password Security:**
 - Django's built-in password validation
-- Minimum 8 characters with complexity requirements
+- Minimum 8 characters with complexity requirements (upper/lower/number)
 - Password hashing using Django's PBKDF2 algorithm
 - Rate limiting on authentication attempts
 
@@ -194,12 +190,11 @@ const AuthContext = createContext({
 });
 ```
 
-### Token Management
+### Session Management
 
 **Axios Interceptors:**
-- Automatic token attachment to API requests
-- Token refresh on 401 responses
-- Logout on refresh token expiration
+- CSRF token retrieval for state-changing requests
+- Redirect to login on 401 responses
 
 **Route Protection:**
 - Higher-order component for protected routes
@@ -252,7 +247,7 @@ Django-allauth will automatically create social account tables:
 
 The authentication system will address OWASP Top 10 security risks:
 
-1. **Broken Authentication**: JWT tokens with proper expiration and rotation
+1. **Broken Authentication**: Session cookies with proper expiration and CSRF protection
 2. **Sensitive Data Exposure**: HTTPS enforcement and secure token storage
 3. **XML External Entities**: Not applicable for JSON-based API
 4. **Broken Access Control**: Role-based permissions and route protection
@@ -283,7 +278,7 @@ Compliance with data protection regulations:
 
 ### Phase 1: Backend Authentication Setup
 1. Install and configure Django-allauth
-2. Implement JWT token authentication
+2. Configure session authentication and CSRF protection
 3. Create authentication API endpoints
 4. Set up email configuration for verification
 5. Configure social authentication providers
@@ -304,6 +299,6 @@ Compliance with data protection regulations:
 
 ## Conclusion
 
-The proposed JWT token-based authentication system using Django-allauth provides a comprehensive, secure, and scalable solution for the AgriSight platform. This architecture supports all required authentication features while maintaining flexibility for future enhancements and mobile application development. The implementation will follow modern security best practices and provide an excellent user experience across all supported authentication methods.
+The current session-based authentication system using Django-allauth provides a comprehensive, secure, and scalable solution for the AgriSight platform. This architecture supports all required authentication features while maintaining flexibility for future enhancements and mobile application development. The implementation follows modern security best practices and provides an excellent user experience across all supported authentication methods.
 
 The next phase will involve the detailed implementation of the Django-allauth backend system with all specified authentication features.

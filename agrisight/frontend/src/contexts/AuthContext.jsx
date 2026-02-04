@@ -363,27 +363,28 @@ export const AuthProvider = ({ children }) => {
   
   const hasPermission = (permission) => {
     if (!state.user) return false;
-    
+
     // Admin has all permissions
     if (hasRole('admin')) return true;
-    
+
     // Check user-specific permissions
     if (state.user.permissions && state.user.permissions.includes(permission)) {
       return true;
     }
-    
-    // Check role-based permissions (must match backend)
-    const rolePermissions = {
-      'admin': ['*'], // All permissions
-      'humanitarian': ['view_data', 'export_data', 'generate_reports', 'view_analytics'],
-      'cooperative': ['view_data', 'view_analytics', 'manage_regions', 'view_stress_events'],
-      'government': ['view_data', 'view_analytics', 'manage_organizations', 'view_all_regions'],
-      'researcher': ['view_data', 'view_analytics', 'export_data', 'view_stress_events', 'view_conflict_events']
-    };
-    
+
+    const rolePermissions =
+      state.authConfig?.rbac?.role_permissions ||
+      {
+        'admin': ['*'], // All permissions
+        'humanitarian': ['view_data', 'export_data', 'generate_reports', 'view_analytics'],
+        'cooperative': ['view_data', 'view_analytics', 'manage_regions', 'view_stress_events'],
+        'government': ['view_data', 'view_analytics', 'manage_organizations', 'view_all_regions'],
+        'researcher': ['view_data', 'view_analytics', 'export_data', 'view_stress_events', 'view_conflict_events']
+      };
+
     const userRole = state.user.user_type || state.user.user_type_code;
     const permissions = rolePermissions[userRole] || [];
-    
+
     return permissions.includes('*') || permissions.includes(permission);
   };
   
@@ -394,14 +395,37 @@ export const AuthProvider = ({ children }) => {
   
   const getUserTypeLabel = () => {
     const userType = getUserType();
-    const labels = {
-      'admin': 'Administrator',
-      'humanitarian': 'Humanitarian Organization',
-      'cooperative': 'Agricultural Cooperative',
-      'government': 'Government Agency',
-      'researcher': 'Researcher'
-    };
+    const labels =
+      state.authConfig?.rbac?.role_labels ||
+      {
+        'admin': 'Administrator',
+        'humanitarian': 'Humanitarian Organization',
+        'cooperative': 'Agricultural Cooperative',
+        'government': 'Government Agency',
+        'researcher': 'Researcher'
+      };
     return labels[userType] || 'User';
+  };
+
+  const getDefaultPath = () => {
+    const routePriority = [
+      { path: '/', permission: 'view_data' },
+      { path: '/analytics', permission: 'view_analytics' },
+      { path: '/reports', permission: 'generate_reports' },
+      { path: '/exports', permission: 'export_data' },
+      { path: '/regions', permission: 'manage_regions' },
+      { path: '/stress-events', permission: 'view_stress_events' },
+      { path: '/alerts', permission: 'view_data' },
+      { path: '/organizations', permission: 'manage_organizations' },
+    ];
+
+    for (const route of routePriority) {
+      if (hasPermission(route.permission)) {
+        return route.path;
+      }
+    }
+
+    return '/profile';
   };
 
   const value = {
@@ -424,6 +448,7 @@ export const AuthProvider = ({ children }) => {
     hasPermission,
     getUserType,
     getUserTypeLabel,
+    getDefaultPath,
   };
 
   return (

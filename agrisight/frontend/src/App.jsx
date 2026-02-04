@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { setupGlobalErrorHandlers } from './lib/errorLogger';
 import { initWebVitals } from './lib/performanceMonitor';
@@ -24,6 +24,8 @@ const Alerts = lazy(() => import('./pages/Alerts'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Exports = lazy(() => import('./pages/Exports'));
 const Organizations = lazy(() => import('./pages/Organizations'));
+const Users = lazy(() => import('./pages/Users'));
+const ApiKeys = lazy(() => import('./pages/ApiKeys'));
 const AdminSettings = lazy(() => import('./pages/AdminSettings'));
 const AdminPerformance = lazy(() => import('./pages/AdminPerformance'));
 const Profile = lazy(() => import('./pages/Profile'));
@@ -68,9 +70,43 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+// Permission Route component (RBAC guard)
+const PermissionRoute = ({ children, permission, permissions }) => {
+  const { isAuthenticated, isLoading, hasPermission, getDefaultPath } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/landing" replace state={{ from: location }} />;
+  }
+
+  const required = permissions || (permission ? [permission] : []);
+  const isAllowed = required.length === 0 || required.some((perm) => hasPermission(perm));
+
+  if (!isAllowed) {
+    const fallback = getDefaultPath();
+    if (fallback && fallback !== location.pathname) {
+      return <Navigate to={fallback} replace state={{ from: location }} />;
+    }
+    return <Navigate to="/error/403" replace state={{ from: location }} />;
+  }
+
+  return children;
+};
+
 // Public Route component (redirects to dashboard if authenticated)
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, getDefaultPath } = useAuth();
 
   if (isLoading) {
     return (
@@ -84,7 +120,7 @@ const PublicRoute = ({ children }) => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={getDefaultPath()} replace />;
   }
 
   return children;
@@ -117,146 +153,188 @@ function App() {
               <Router>
                 <ErrorNotificationStack />
                 <div className="App">
-              <Routes>
-            {/* Public routes */}
-            <Route path="/landing" element={<Landing />} />
-            <Route path="/demo" element={<PublicDemo />} />
-              <Route path="/login" element={
-                <PublicRoute>
-                  <Login />
-                </PublicRoute>
-              } />
-              <Route path="/register" element={
-                <PublicRoute>
-                  <Suspense fallback={<Fallback />}>
-                    <Register />
-                  </Suspense>
-                </PublicRoute>
-              } />
-              <Route path="/forgot-password" element={
-                <PublicRoute>
-                  <Suspense fallback={<Fallback />}>
-                    <ForgotPassword />
-                  </Suspense>
-                </PublicRoute>
-              } />
-              <Route path="/reset-password" element={
-                <PublicRoute>
-                  <Suspense fallback={<Fallback />}>
-                    <ResetPassword />
-                  </Suspense>
-                </PublicRoute>
-              } />
-              <Route path="/privacy" element={
-                <Suspense fallback={<Fallback />}>
-                  <Privacy />
-                </Suspense>
-              } />
-              <Route path="/terms" element={
-                <Suspense fallback={<Fallback />}>
-                  <Terms />
-                </Suspense>
-              } />
-              <Route path="/support" element={
-                <Suspense fallback={<Fallback />}>
-                  <Support />
-                </Suspense>
-              } />
+                  <Routes>
+                    {/* Public routes */}
+                    <Route path="/landing" element={<Landing />} />
+                    <Route path="/demo" element={<PublicDemo />} />
+                    <Route path="/login" element={
+                      <PublicRoute>
+                        <Login />
+                      </PublicRoute>
+                    } />
+                    <Route path="/register" element={
+                      <PublicRoute>
+                        <Suspense fallback={<Fallback />}>
+                          <Register />
+                        </Suspense>
+                      </PublicRoute>
+                    } />
+                    <Route path="/forgot-password" element={
+                      <PublicRoute>
+                        <Suspense fallback={<Fallback />}>
+                          <ForgotPassword />
+                        </Suspense>
+                      </PublicRoute>
+                    } />
+                    <Route path="/reset-password" element={
+                      <PublicRoute>
+                        <Suspense fallback={<Fallback />}>
+                          <ResetPassword />
+                        </Suspense>
+                      </PublicRoute>
+                    } />
+                    <Route path="/privacy" element={
+                      <Suspense fallback={<Fallback />}>
+                        <Privacy />
+                      </Suspense>
+                    } />
+                    <Route path="/terms" element={
+                      <Suspense fallback={<Fallback />}>
+                        <Terms />
+                      </Suspense>
+                    } />
+                    <Route path="/support" element={
+                      <Suspense fallback={<Fallback />}>
+                        <Support />
+                      </Suspense>
+                    } />
 
-              {/* Protected routes */}
-              <Route element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/map" element={
-                  <Suspense fallback={<Fallback />}>
-                    <MapView />
-                  </Suspense>
-                } />
-                <Route path="/regions" element={
-                  <Suspense fallback={<Fallback />}>
-                    <Regions />
-                  </Suspense>
-                } />
-                <Route path="/satellite" element={
-                  <Suspense fallback={<Fallback />}>
-                    <SatelliteData />
-                  </Suspense>
-                } />
-                <Route path="/vegetation" element={
-                  <Suspense fallback={<Fallback />}>
-                    <VegetationIndices />
-                  </Suspense>
-                } />
-                <Route path="/analytics" element={
-                  <Suspense fallback={<Fallback />}>
-                    <Analytics />
-                  </Suspense>
-                } />
-                <Route path="/stress-events" element={
-                  <Suspense fallback={<Fallback />}>
-                    <StressEvents />
-                  </Suspense>
-                } />
-                <Route path="/alerts" element={
-                  <Suspense fallback={<Fallback />}>
-                    <Alerts />
-                  </Suspense>
-                } />
-                <Route path="/reports" element={
-                  <Suspense fallback={<Fallback />}>
-                    <Reports />
-                  </Suspense>
-                } />
-                <Route path="/exports" element={
-                  <Suspense fallback={<Fallback />}>
-                    <Exports />
-                  </Suspense>
-                } />
-                <Route path="/organizations" element={
-                  <Suspense fallback={<Fallback />}>
-                    <Organizations />
-                  </Suspense>
-                } />
-                <Route path="/admin/settings" element={
-                  <Suspense fallback={<Fallback />}>
-                    <AdminSettings />
-                  </Suspense>
-                } />
-                <Route path="/admin/performance" element={
-                  <Suspense fallback={<Fallback />}>
-                    <AdminPerformance />
-                  </Suspense>
-                } />
-                <Route path="/profile" element={
-                  <Suspense fallback={<Fallback />}>
-                    <Profile />
-                  </Suspense>
-                } />
-                <Route path="/settings" element={
-                  <Suspense fallback={<Fallback />}>
-                    <Settings />
-                  </Suspense>
-                } />
-              </Route>
+                    {/* Protected routes */}
+                    <Route element={
+                      <ProtectedRoute>
+                        <Layout />
+                      </ProtectedRoute>
+                    }>
+                      <Route path="/" element={
+                        <PermissionRoute permission="view_data">
+                          <Dashboard />
+                        </PermissionRoute>
+                      } />
+                      <Route path="/map" element={
+                        <PermissionRoute permission="view_data">
+                          <Suspense fallback={<Fallback />}>
+                            <MapView />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/regions" element={
+                        <PermissionRoute permission="manage_regions">
+                          <Suspense fallback={<Fallback />}>
+                            <Regions />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/satellite" element={
+                        <PermissionRoute permission="view_data">
+                          <Suspense fallback={<Fallback />}>
+                            <SatelliteData />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/vegetation" element={
+                        <PermissionRoute permission="view_analytics">
+                          <Suspense fallback={<Fallback />}>
+                            <VegetationIndices />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/analytics" element={
+                        <PermissionRoute permission="view_analytics">
+                          <Suspense fallback={<Fallback />}>
+                            <Analytics />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/stress-events" element={
+                        <PermissionRoute permission="view_stress_events">
+                          <Suspense fallback={<Fallback />}>
+                            <StressEvents />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/alerts" element={
+                        <PermissionRoute permission="view_data">
+                          <Suspense fallback={<Fallback />}>
+                            <Alerts />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/reports" element={
+                        <PermissionRoute permission="generate_reports">
+                          <Suspense fallback={<Fallback />}>
+                            <Reports />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/exports" element={
+                        <PermissionRoute permission="export_data">
+                          <Suspense fallback={<Fallback />}>
+                            <Exports />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/organizations" element={
+                        <PermissionRoute permission="manage_organizations">
+                          <Suspense fallback={<Fallback />}>
+                            <Organizations />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/admin/users" element={
+                        <PermissionRoute permission="admin_access">
+                          <Suspense fallback={<Fallback />}>
+                            <Users />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/admin/api-keys" element={
+                        <PermissionRoute permission="admin_access">
+                          <Suspense fallback={<Fallback />}>
+                            <ApiKeys />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/admin/settings" element={
+                        <PermissionRoute permission="admin_access">
+                          <Suspense fallback={<Fallback />}>
+                            <AdminSettings />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/admin/performance" element={
+                        <PermissionRoute permission="admin_access">
+                          <Suspense fallback={<Fallback />}>
+                            <AdminPerformance />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
+                      <Route path="/profile" element={
+                        <Suspense fallback={<Fallback />}>
+                          <Profile />
+                        </Suspense>
+                      } />
+                      <Route path="/settings" element={
+                        <Suspense fallback={<Fallback />}>
+                          <Settings />
+                        </Suspense>
+                      } />
+                    </Route>
 
-              {/* Error routes */}
-              <Route path="/error/400" element={<ErrorPage status={400} />} />
-              <Route path="/error/401" element={<ErrorPage status={401} />} />
-              <Route path="/error/403" element={<ErrorPage status={403} />} />
-              <Route path="/error/404" element={<ErrorPage status={404} />} />
-              <Route path="/error/500" element={<ErrorPage status={500} />} />
-              <Route path="/error/network" element={<ErrorPage status="NETWORK_ERROR" />} />
+                    {/* Error routes */}
+                    <Route path="/error/400" element={<ErrorPage status={400} />} />
+                    <Route path="/error/401" element={<ErrorPage status={401} />} />
+                    <Route path="/error/403" element={<ErrorPage status={403} />} />
+                    <Route path="/error/404" element={<ErrorPage status={404} />} />
+                    <Route path="/error/500" element={<ErrorPage status={500} />} />
+                    <Route path="/error/network" element={<ErrorPage status="NETWORK_ERROR" />} />
 
-              {/* Catch all route */}
-              <Route path="*" element={
-                <Navigate to="/landing" replace />
-              } />
-            </Routes>
-          </div>
-          </Router>
+                    {/* Catch all route */}
+                    <Route path="*" element={
+                      <Navigate to="/landing" replace />
+                    } />
+                  </Routes>
+                </div>
+              </Router>
             </ErrorProvider>
           </WebSocketProvider>
         </AuthProvider>

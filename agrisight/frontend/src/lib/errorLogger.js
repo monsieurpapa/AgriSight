@@ -30,7 +30,7 @@ class ErrorLogger {
     this.sessionLogs = [];
     this.enableRemoteLogging = true;
     this.enableConsoleLogging = true;
-    this.logLevel = process.env.NODE_ENV === 'development' ? LOG_LEVELS.DEBUG : LOG_LEVELS.ERROR;
+    this.logLevel = import.meta.env.DEV ? LOG_LEVELS.DEBUG : LOG_LEVELS.ERROR;
   }
 
   /**
@@ -67,7 +67,7 @@ class ErrorLogger {
    * Log debug message (only in development)
    */
   debug(message, context = {}) {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       this.log(message, LOG_LEVELS.DEBUG, context);
     }
   }
@@ -293,7 +293,7 @@ class ErrorLogger {
 const errorLogger = new ErrorLogger();
 
 // Expose in development for debugging
-if (process.env.NODE_ENV === 'development') {
+if (import.meta.env.DEV) {
   window.errorLogger = errorLogger;
 }
 

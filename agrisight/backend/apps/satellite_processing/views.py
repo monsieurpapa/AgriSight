@@ -7,6 +7,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.db.models import Avg
+from django.db.models.functions import TruncDate
 from datetime import datetime, timedelta
 
 from apps.geospatial.models import Region, SatelliteImage, VegetationIndex
@@ -16,9 +18,11 @@ from .tasks import (
     process_region_satellite_data,
     ingest_sentinel_data_periodic,
     generate_vegetation_trend_analysis,
-    create_stress_alerts
+    create_stress_alerts,
+    trigger_batch_processing
 )
 from .processors import SatelliteDataProcessor
+from .models import BatchJob
 
 
 @api_view(['POST'])
@@ -208,12 +212,58 @@ def get_region_vegetation_data(request, region_id):
         )
 
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
 def generate_trend_analysis(request):
     """
     Generate vegetation trend analysis for a region.
     """
+    if request.method == 'GET':
+        region_id = request.GET.get('region_id')
+        days_back = int(request.GET.get('days', 30))
+
+        user = request.user
+        if user.user_type == 'admin':
+            accessible_regions = Region.objects.all()
+        elif user.organization:
+            accessible_regions = Region.objects.filter(organizations=user.organization)
+        else:
+            accessible_regions = Region.objects.none()
+
+        if region_id:
+            if not accessible_regions.filter(id=region_id).exists():
+                return Response(
+                    {'error': 'Access denied to this region'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            accessible_regions = accessible_regions.filter(id=region_id)
+
+        end_date = timezone.now()
+        start_date = end_date - timedelta(days=days_back)
+
+        indices = VegetationIndex.objects.filter(
+            satellite_image__region__in=accessible_regions,
+            satellite_image__acquisition_date__gte=start_date,
+            satellite_image__is_processed=True
+        )
+
+        records = indices.annotate(
+            date=TruncDate('satellite_image__acquisition_date')
+        ).values('date', 'index_type').annotate(
+            mean_value=Avg('mean_value')
+        ).order_by('date')
+
+        trend_map = {}
+        for record in records:
+            date_key = record['date'].isoformat()
+            if date_key not in trend_map:
+                trend_map[date_key] = {'date': date_key}
+            index_key = record['index_type'].lower()
+            trend_map[date_key][index_key] = record['mean_value']
+
+        trend_data = [trend_map[key] for key in sorted(trend_map.keys())]
+        return Response(trend_data)
+
     region_id = request.data.get('region_id')
     months_back = request.data.get('months_back', 12)
     
@@ -270,6 +320,12 @@ def get_processing_statistics(request):
     
     try:
         # Calculate statistics
+        # Count active batch jobs
+        active_batch_jobs = BatchJob.objects.filter(
+            region__in=accessible_regions,
+            status__in=['CREATED', 'ANALYSING', 'PROCESSING']
+        ).count()
+
         total_regions = accessible_regions.count()
         
         # Get satellite images for accessible regions
@@ -317,6 +373,7 @@ def get_processing_statistics(request):
         return Response({
             'overview': {
                 'total_regions': total_regions,
+                'active_tasks': active_batch_jobs,
                 'total_images': total_images,
                 'processed_images': processed_images,
                 'processing_percentage': (processed_images / total_images * 100) if total_images > 0 else 0,
@@ -428,7 +485,7 @@ def get_satellite_image_details(request, image_id):
                 'bands_available': satellite_image.bands_available,
                 'is_processed': satellite_image.is_processed,
                 'processing_notes': satellite_image.processing_notes,
-                'metadata': satellite_image.metadata,
+                'metadata': getattr(satellite_image, 'metadata', None),
                 'created_at': satellite_image.created_at.isoformat(),
                 'updated_at': satellite_image.updated_at.isoformat()
             },
@@ -448,3 +505,73 @@ def get_satellite_image_details(request, image_id):
             {'error': f'Failed to get satellite image details: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def trigger_batch_processing_view(request):
+    """
+    Trigger a Batch V2 processing job for a region.
+    """
+    region_id = request.data.get('region_id')
+    start_date = request.data.get('start_date')
+    end_date = request.data.get('end_date')
+    
+    if not all([region_id, start_date, end_date]):
+        return Response(
+            {'error': 'region_id, start_date, and end_date are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+        
+    try:
+        task = trigger_batch_processing.delay(region_id, start_date, end_date)
+        return Response({
+            'task_id': task.id,
+            'request_id': task.id,
+            'status': 'Initiated',
+            'message': f'Batch processing initiated for region {region_id}'
+        })
+    except Exception as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_region_batch_jobs(request, region_id):
+    """
+    Get all batch jobs for a specific region.
+    """
+    try:
+        jobs = BatchJob.objects.filter(region_id=region_id).order_by('-created_at')
+        data = [{
+            'request_id': job.request_id,
+            'status': job.status,
+            'description': job.description,
+            'created_at': job.created_at,
+            's3_bucket': job.s3_bucket,
+            'time_range_start': job.time_range_start,
+            'time_range_end': job.time_range_end
+        } for job in jobs]
+        return Response(data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_batch_job_status(request, job_id):
+    """
+    Get status of a specific batch job by request_id.
+    """
+    try:
+        job = BatchJob.objects.get(request_id=job_id)
+        return Response({
+            'request_id': job.request_id,
+            'status': job.status,
+            'created_at': job.created_at,
+            'updated_at': job.updated_at
+        })
+    except BatchJob.DoesNotExist:
+         return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
+

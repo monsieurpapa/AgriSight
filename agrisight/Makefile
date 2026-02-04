@@ -1,7 +1,7 @@
 # AgriSight Platform Makefile
 # Comprehensive maintenance and operations commands
 
-.PHONY: help build up down restart logs clean test lint format migrate collectstatic createsuperuser shell backup restore health-check
+.PHONY: help build up down restart logs clean test lint format migrate collectstatic createsuperuser shell backup restore health-check run-services test-backend-full test-frontend down-clean test-db-reset
 
 # Default target
 help: ## Show this help message
@@ -22,8 +22,14 @@ up: ## Start all services in detached mode
 up-build: ## Build and start all services
 	docker-compose up --build -d
 
+run-services: ## Build and start all services (alias for up-build)
+	docker-compose up -d --build
+
 down: ## Stop all services
 	docker-compose down
+
+down-clean: ## Stop all services and remove orphans
+	docker-compose down --remove-orphans
 
 restart: ## Restart all services
 	docker-compose restart
@@ -114,6 +120,15 @@ check: ## Run Django system checks
 # Development and Testing
 test: ## Run all tests
 	docker-compose exec backend python manage.py test
+
+test-backend-full: ## Run full backend test suite (alias for test)
+	docker-compose exec backend python manage.py test
+
+test-frontend: ## Run frontend test suite
+	docker-compose exec frontend npm run test:run
+
+test-db-reset: ## Drop the Django test database if it exists
+	docker-compose exec -T postgres psql -U agrisight_user -d postgres -c "DROP DATABASE IF EXISTS test_agrisight;"
 
 test-coverage: ## Run tests with coverage
 	docker-compose exec backend coverage run --source='.' manage.py test

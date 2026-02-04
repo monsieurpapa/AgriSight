@@ -63,7 +63,7 @@ frontend/
 
 #### Authentication Context (`src/contexts/AuthContext.jsx`)
 - **State Management**: Comprehensive auth state with useReducer
-- **Token Handling**: Automatic token storage and refresh
+- **Session Handling**: CSRF-aware session authentication
 - **Role-Based Access**: Permission and role checking utilities
 - **Error Handling**: Comprehensive error states and user feedback
 
@@ -94,6 +94,9 @@ frontend/
 - **Recent Activity**: Timeline of system events
 - **Region Performance**: Agricultural health monitoring
 - **Quick Actions**: Common task shortcuts
+- **Auto-Refresh**: Dashboard data refreshes every 60 seconds
+- **Partial Data Handling**: Warning banner if some data sources fail
+- **Empty States**: Clear messaging when no data is available
 
 #### Chart Components
 - **Line Charts**: Vegetation index trends over time
@@ -101,11 +104,46 @@ frontend/
 - **Bar Charts**: Comparative analysis displays
 - **Responsive Design**: Charts adapt to container sizes
 
-### 4. API Integration Layer
+### 4. Interactive Mapping
+
+#### Map View (`src/pages/MapView.jsx`)
+- **Base Map Switching**: OpenStreetMap, satellite imagery, and terrain layers
+- **Layer Controls**: NDVI, EVI, NDWI, and stress event overlays
+- **Opacity Control**: Shared opacity slider for region fills and stress markers
+- **Severity Mapping**: Numeric severity values normalized to low/medium/high
+- **Contextual Details**: Region popups and side panel respect active layers
+
+### 5. Analytics & Reporting
+
+#### Analytics (`src/pages/Analytics.jsx`)
+- **Scoped Summaries**: Stress and conflict summaries respect region and time range filters
+- **Severity Normalization**: Numeric severity values are mapped to low/medium/high
+- **Trend Visualization**: NDVI/EVI/NDWI time series from backend trend analysis
+- **Actionable Insights**: Insights panel driven by summary data
+
+#### Reports (`src/pages/Reports.jsx`)
+- **Report Generation**: Basic form for report creation with time range and region selection
+- **Downloads**: Direct downloads via backend report endpoint
+
+### 6. Monitoring & Alerts
+
+#### Alerts (`src/pages/Alerts.jsx`)
+- **Alert Feed**: Lists backend alerts with severity filtering
+- **Actions**: Mark individual alerts or mark all as read
+- **Real-time**: Integrates WebSocket notifications for live updates
+
+#### Satellite Monitoring (`src/pages/SatelliteData.jsx`)
+- **Processing Overview**: Live processing statistics and stress activity
+- **Region Status**: Per-region processing counts and stress events
+
+#### Admin Performance (`src/pages/AdminPerformance.jsx`)
+- **Health Checks**: Admin-only health and detailed status endpoints
+
+### 7. API Integration Layer
 
 #### API Service (`src/lib/api.js`)
 - **Axios Configuration**: Centralized HTTP client setup
-- **Authentication Interceptors**: Automatic token injection
+- **Authentication Interceptors**: CSRF handling for session auth
 - **Error Handling**: Comprehensive error response processing
 - **Service Classes**: Organized API endpoints by functionality
 
@@ -119,7 +157,26 @@ frontend/
 - **Reports**: Document generation and export
 - **Alerts**: Notification management
 
-### 5. Utility Functions
+### 8. Data Management & Export
+
+#### Exports (`src/pages/Exports.jsx`)
+- **CSV Export**: Vegetation indices filtered by region and index type
+- **GeoJSON Export**: Region boundaries and metadata
+- **Imagery Metadata**: Satellite image metadata CSV for historical access
+- **Data Quality Summary**: Snapshot of processing completeness
+
+### 9. Administration
+
+#### Users (`src/pages/Users.jsx`)
+- **User Management**: List and create users with role and organization assignments
+
+#### Organizations (`src/pages/Organizations.jsx`)
+- **Organization Management**: Create and manage tenant organizations
+
+#### API Keys (`src/pages/ApiKeys.jsx`)
+- **API Key Lifecycle**: Create, regenerate, and revoke organization API keys
+
+### 10. Utility Functions
 
 #### Date and Time (`src/lib/utils.js`)
 - **Date Formatting**: Consistent date display across application
@@ -244,14 +301,14 @@ CMD ["nginx", "-g", "daemon off;"]
 
 #### Development (`.env`)
 ```bash
-VITE_API_URL=http://localhost:8000/api
+VITE_API_BASE_URL=http://localhost:8000
 VITE_APP_NAME=AgriSight
 VITE_DEBUG=true
 ```
 
 #### Production
 ```bash
-VITE_API_URL=https://api.agrisight.org/api
+VITE_API_BASE_URL=https://api.agrisight.org
 VITE_APP_NAME=AgriSight
 VITE_DEBUG=false
 ```
@@ -272,7 +329,7 @@ VITE_DEBUG=false
 
 ### Backend Dependencies
 - **Django REST API**: RESTful API endpoints
-- **Token Authentication**: JWT or Django token auth
+- **Session Authentication**: CSRF-protected session auth
 - **CORS Configuration**: Cross-origin request support
 - **WebSocket Support**: Real-time data updates
 
@@ -324,7 +381,7 @@ VITE_DEBUG=false
 ## Future Enhancements
 
 ### Phase 1 (Short-term)
-- **Map Integration**: Leaflet maps with satellite overlays
+- **Map Enhancements**: Measurement tools, export workflows, and offline caching
 - **Real-time Data**: WebSocket integration for live updates
 - **Mobile App**: React Native mobile application
 - **Offline Support**: Progressive Web App features
@@ -373,4 +430,3 @@ The AgriSight frontend provides a comprehensive, production-ready interface for 
 - **Integration Ready**: Seamless backend integration capabilities
 
 The platform successfully addresses the unique needs of agricultural monitoring in challenging environments while providing a modern, reliable tool for humanitarian organizations and agricultural stakeholders.
-

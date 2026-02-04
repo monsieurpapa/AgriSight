@@ -157,6 +157,8 @@ const filteredItems = items.filter(item => {
 - User selects user type during registration
 - Backend validates user type and assigns appropriate permissions
 - Frontend receives user data with permissions array
+- Email verification is required before login
+- Passwords must include uppercase, lowercase, and a number (minimum 8 characters)
 
 ### 2. User Login
 - Session-based authentication with CSRF protection

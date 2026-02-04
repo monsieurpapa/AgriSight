@@ -9,17 +9,14 @@ import {
   Activity,
   Users,
   FileText,
-  Calendar,
-  Clock,
   Eye,
   Download,
-  Plus,
-  Settings
+  Plus
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
-import { Progress } from '../components/ui/progress';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import {
   LineChart,
   Line,
@@ -38,7 +35,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
-import { dashboardAPI, satelliteProcessingAPI, analyticsAPI } from '../lib/api';
+import { dashboardAPI, satelliteProcessingAPI } from '../lib/api';
 import APIError from '../components/error/APIError';
 import { 
   formatDate, 
@@ -52,34 +49,48 @@ import {
 } from '../lib/utils';
 
 const Dashboard = () => {
-  const { user, organization } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { isConnected, realTimeData, notifications } = useWebSocketContext();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [warnings, setWarnings] = useState([]);
   const navigate = useNavigate();
 
   // Fetch real dashboard data from APIs
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = async (isRefresh = false) => {
       try {
-        setLoading(true);
+        if (!isRefresh) {
+          setLoading(true);
+        }
         setError(null);
         
         // Fetch comprehensive dashboard data
-        const data = await dashboardAPI.getDashboardData();
+        const data = await dashboardAPI.getDashboardData({
+          includeOrganizations: hasPermission('manage_organizations'),
+        });
         
+        setWarnings(data.errors || []);
+
+        const regionsData = data.regions || { count: 0, results: [] };
+        const regionsList = regionsData.results || [];
+        const regionsCount = regionsData.count ?? regionsList.length;
+        const alertsData = data.alerts || { count: 0, results: [] };
+        const reportsData = data.reports || { count: 0, results: [] };
+        const organizationsData = data.organizations || { count: 0, results: [] };
+
         // Transform the data to match the expected format
         const transformedData = {
           stats: {
-            totalRegions: data.regions?.count || 0,
-            activeRegions: data.regions?.results?.filter(r => r.is_active).length || 0,
-            totalArea: data.regions?.results?.reduce((sum, r) => sum + (r.area_hectares || 0), 0) / 100 || 0, // Convert to km²
+            totalRegions: regionsCount,
+            activeRegions: regionsList.filter(r => r.is_active).length || 0,
+            totalArea: regionsList.reduce((sum, r) => sum + (r.area_hectares || 0), 0) / 100 || 0, // Convert to km²
             lastUpdate: data.lastUpdate,
             processingTasks: data.processingStats?.active_tasks || 0,
-            alertsCount: data.alerts?.count || 0,
-            reportsGenerated: data.reports?.count || 0,
-            organizationsCount: 1 // Will be updated when organizations API is called
+            alertsCount: alertsData.count || 0,
+            reportsGenerated: reportsData.count || 0,
+            organizationsCount: organizationsData.count || 0
           },
           recentActivity: [
             // Recent stress events
@@ -115,9 +126,9 @@ const Dashboard = () => {
             { name: 'Healthy', value: data.stressSummary?.events_by_severity?.low || 0, color: '#10b981' },
             { name: 'Moderate', value: data.stressSummary?.events_by_severity?.medium || 0, color: '#f59e0b' },
             { name: 'Stressed', value: data.stressSummary?.events_by_severity?.high || 0, color: '#ef4444' },
-            { name: 'No Data', value: Math.max(0, (data.regions?.count || 0) - (data.stressSummary?.total_events || 0)), color: '#6b7280' }
+            { name: 'No Data', value: Math.max(0, regionsCount - (data.stressSummary?.total_events || 0)), color: '#6b7280' }
           ],
-          topRegions: data.regions?.results?.slice(0, 5).map(region => ({
+          topRegions: regionsList.slice(0, 5).map(region => ({
             name: region.name,
             ndvi: 0.5, // Will be updated with real vegetation data
             area: region.area_hectares / 100, // Convert to km²
@@ -127,9 +138,9 @@ const Dashboard = () => {
         };
 
         // Fetch vegetation trend data for the first few regions
-        if (data.regions?.results?.length > 0) {
+        if (regionsList.length > 0) {
           try {
-            const vegetationPromises = data.regions.results.slice(0, 3).map(region => 
+            const vegetationPromises = regionsList.slice(0, 3).map(region => 
               satelliteProcessingAPI.getRegionVegetationData(region.id, { days: 30 })
             );
             const vegetationData = await Promise.all(vegetationPromises);
@@ -164,14 +175,7 @@ const Dashboard = () => {
               .sort((a, b) => new Date(a.date) - new Date(b.date));
           } catch (vegetationError) {
             console.warn('Failed to fetch vegetation data:', vegetationError);
-            // Use fallback mock data for vegetation trends
-            transformedData.vegetationTrends = [
-              { date: '2023-10-01', ndvi: 0.65, evi: 0.58, ndwi: 0.12, savi: 0.52 },
-              { date: '2023-10-08', ndvi: 0.62, evi: 0.55, ndwi: 0.15, savi: 0.49 },
-              { date: '2023-10-15', ndvi: 0.58, evi: 0.51, ndwi: 0.18, savi: 0.46 },
-              { date: '2023-10-22', ndvi: 0.54, evi: 0.47, ndwi: 0.22, savi: 0.42 },
-              { date: '2023-10-29', ndvi: 0.51, evi: 0.44, ndwi: 0.25, savi: 0.39 },
-            ];
+            setWarnings(prev => (prev || []).concat([{ error: vegetationError }]));
           }
         }
 
@@ -179,66 +183,16 @@ const Dashboard = () => {
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
         setError('Failed to load dashboard data. Please try again.');
-        
-        // Fallback to mock data if API fails
-        const mockData = {
-          stats: {
-            totalRegions: 12,
-            activeRegions: 8,
-            totalArea: 2450.5,
-            lastUpdate: new Date().toISOString(),
-            processingTasks: 3,
-            alertsCount: 5,
-            reportsGenerated: 23,
-            organizationsCount: 4
-          },
-          recentActivity: [
-            {
-              id: 1,
-              type: 'processing',
-              title: 'Satellite data processing completed',
-              description: 'NDVI analysis for Goma region finished',
-              timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-              status: 'completed'
-            },
-            {
-              id: 2,
-              type: 'alert',
-              title: 'Agricultural stress detected',
-              description: 'Low NDVI values in Bukavu agricultural zone',
-              timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-              status: 'warning'
-            }
-          ],
-          vegetationTrends: [
-            { date: '2023-10-01', ndvi: 0.65, evi: 0.58, ndwi: 0.12, savi: 0.52 },
-            { date: '2023-10-08', ndvi: 0.62, evi: 0.55, ndwi: 0.15, savi: 0.49 },
-            { date: '2023-10-15', ndvi: 0.58, evi: 0.51, ndwi: 0.18, savi: 0.46 },
-            { date: '2023-10-22', ndvi: 0.54, evi: 0.47, ndwi: 0.22, savi: 0.42 },
-            { date: '2023-10-29', ndvi: 0.51, evi: 0.44, ndwi: 0.25, savi: 0.39 },
-          ],
-          regionStatus: [
-            { name: 'Healthy', value: 5, color: '#10b981' },
-            { name: 'Moderate', value: 4, color: '#f59e0b' },
-            { name: 'Stressed', value: 2, color: '#ef4444' },
-            { name: 'No Data', value: 1, color: '#6b7280' }
-          ],
-          topRegions: [
-            { name: 'Goma Agricultural Zone', ndvi: 0.72, area: 245.3, status: 'healthy', change: 0.05 },
-            { name: 'Bukavu Farmlands', ndvi: 0.68, area: 189.7, status: 'healthy', change: 0.02 },
-            { name: 'Uvira Coastal Plains', ndvi: 0.45, area: 156.2, status: 'moderate', change: -0.08 },
-            { name: 'Rutshuru Valley', ndvi: 0.32, area: 298.1, status: 'stressed', change: -0.15 },
-            { name: 'Masisi Highlands', ndvi: 0.28, area: 201.4, status: 'stressed', change: -0.12 }
-          ]
-        };
-        setDashboardData(mockData);
       } finally {
-        setLoading(false);
+        if (!isRefresh) {
+          setLoading(false);
+        }
       }
     };
-
-    fetchDashboardData();
-  }, []);
+    fetchDashboardData(false);
+    const intervalId = setInterval(() => fetchDashboardData(true), 60000);
+    return () => clearInterval(intervalId);
+  }, [hasPermission]);
 
   // Handle real-time updates
   useEffect(() => {
@@ -299,34 +253,42 @@ const Dashboard = () => {
     );
   }
 
-          if (error) {
-            return (
-              <div className="space-y-6">
-                <div className="mb-8">
-                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                    Welcome back, {user?.first_name}!
-                  </h1>
-                  <p className="text-gray-600 dark:text-gray-400 mt-2">
-                    Here's what's happening with your agricultural monitoring system.
-                  </p>
-                </div>
-                
-                <APIError 
-                  error={error}
-                  onRetry={() => window.location.reload()}
-                  title="Dashboard Loading Error"
-                  description="Failed to load dashboard data. Please try again."
-                />
-              </div>
-            );
-          }
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Welcome back, {user?.first_name}!
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            Here's what's happening with your agricultural monitoring system.
+          </p>
+        </div>
+        
+        <APIError 
+          error={error}
+          onRetry={() => window.location.reload()}
+          title="Dashboard Loading Error"
+          description="Failed to load dashboard data. Please try again."
+        />
+      </div>
+    );
+  }
 
   const { stats, recentActivity, vegetationTrends, regionStatus, topRegions } = dashboardData;
+  const regionStatusTotal = regionStatus.reduce((sum, status) => sum + status.value, 0);
 
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
       <div className="mb-8">
+        {warnings.length > 0 && (
+          <Alert className="mb-4">
+            <AlertDescription>
+              Some dashboard data could not be loaded. The view below may be incomplete.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -481,8 +443,13 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={vegetationTrends}>
+              {vegetationTrends.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                  No vegetation trend data available yet.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={vegetationTrends}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis 
                     dataKey="date" 
@@ -542,8 +509,9 @@ const Dashboard = () => {
                     dot={{ fill: '#f59e0b', strokeWidth: 2, r: 4 }}
                     activeDot={{ r: 6, stroke: '#f59e0b', strokeWidth: 2 }}
                   />
-                </LineChart>
-              </ResponsiveContainer>
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
             <div className="mt-4 flex flex-wrap justify-center gap-4">
               {[
@@ -586,34 +554,40 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={regionStatus}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={120}
-                    paddingAngle={5}
-                    dataKey="value"
-                    stroke="#fff"
-                    strokeWidth={2}
-                  >
-                    {regionStatus.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value, name) => [value, name]}
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {regionStatusTotal === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                  No region health data available yet.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={regionStatus}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={120}
+                      paddingAngle={5}
+                      dataKey="value"
+                      stroke="#fff"
+                      strokeWidth={2}
+                    >
+                      {regionStatus.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value, name) => [value, name]}
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
               {regionStatus.map((status, index) => (
@@ -632,7 +606,7 @@ const Dashboard = () => {
                       {status.value}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {((status.value / regionStatus.reduce((sum, s) => sum + s.value, 0)) * 100).toFixed(1)}%
+                      {regionStatusTotal > 0 ? ((status.value / regionStatusTotal) * 100).toFixed(1) : '0.0'}%
                     </div>
                   </div>
                 </div>
@@ -654,37 +628,43 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {topRegions.map((region, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-medium text-gray-900 dark:text-white">
-                        {region.name}
-                      </h4>
-                      <Badge 
-                        variant="outline"
-                        className={getVegetationIndexColor(region.ndvi, 'NDVI')}
-                      >
-                        {getVegetationIndexLabel(region.ndvi, 'NDVI')}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-                      <span>NDVI: {formatVegetationIndex(region.ndvi)}</span>
-                      <span>{formatArea(region.area)}</span>
-                      <div className="flex items-center">
-                        {region.change > 0 ? (
-                          <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
-                        )}
-                        <span className={region.change > 0 ? 'text-green-600' : 'text-red-600'}>
-                          {region.change > 0 ? '+' : ''}{formatVegetationIndex(region.change)}
-                        </span>
+              {topRegions.length === 0 ? (
+                <div className="text-sm text-gray-500">
+                  No region performance data available yet.
+                </div>
+              ) : (
+                topRegions.map((region, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-medium text-gray-900 dark:text-white">
+                          {region.name}
+                        </h4>
+                        <Badge 
+                          variant="outline"
+                          className={getVegetationIndexColor(region.ndvi, 'NDVI')}
+                        >
+                          {getVegetationIndexLabel(region.ndvi, 'NDVI')}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                        <span>NDVI: {formatVegetationIndex(region.ndvi)}</span>
+                        <span>{formatArea(region.area)}</span>
+                        <div className="flex items-center">
+                          {region.change > 0 ? (
+                            <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                          )}
+                          <span className={region.change > 0 ? 'text-green-600' : 'text-red-600'}>
+                            {region.change > 0 ? '+' : ''}{formatVegetationIndex(region.change)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -699,26 +679,32 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start space-x-3">
-                  <div className={`w-2 h-2 rounded-full mt-2 ${
-                    activity.status === 'completed' ? 'bg-green-500' :
-                    activity.status === 'warning' ? 'bg-yellow-500' :
-                    activity.status === 'success' ? 'bg-blue-500' : 'bg-gray-500'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {activity.title}
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {activity.description}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                      {formatRelativeTime(activity.timestamp)}
-                    </p>
-                  </div>
+              {recentActivity.length === 0 ? (
+                <div className="text-sm text-gray-500">
+                  No recent activity yet. Processing updates and alerts will appear here.
                 </div>
-              ))}
+              ) : (
+                recentActivity.map((activity) => (
+                  <div key={activity.id} className="flex items-start space-x-3">
+                    <div className={`w-2 h-2 rounded-full mt-2 ${
+                      activity.status === 'completed' ? 'bg-green-500' :
+                      activity.status === 'warning' ? 'bg-yellow-500' :
+                      activity.status === 'success' ? 'bg-blue-500' : 'bg-gray-500'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {activity.title}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {activity.description}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                        {formatRelativeTime(activity.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <Button variant="outline" size="sm" className="w-full">
@@ -740,60 +726,72 @@ const Dashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <Button 
-              variant="outline" 
-              className="flex flex-col items-center p-4 h-auto hover:bg-green-50 hover:border-green-200 transition-colors"
-              onClick={() => navigate('/satellite')}
-            >
-              <Satellite className="h-6 w-6 mb-2 text-green-600" />
-              <span className="text-sm font-medium">Process Data</span>
-              <span className="text-xs text-gray-500 mt-1">Satellite Analysis</span>
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex flex-col items-center p-4 h-auto hover:bg-blue-50 hover:border-blue-200 transition-colors"
-              onClick={() => navigate('/reports')}
-            >
-              <FileText className="h-6 w-6 mb-2 text-blue-600" />
-              <span className="text-sm font-medium">Generate Report</span>
-              <span className="text-xs text-gray-500 mt-1">Custom Reports</span>
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex flex-col items-center p-4 h-auto hover:bg-purple-50 hover:border-purple-200 transition-colors"
-              onClick={() => navigate('/regions')}
-            >
-              <Plus className="h-6 w-6 mb-2 text-purple-600" />
-              <span className="text-sm font-medium">Add Region</span>
-              <span className="text-xs text-gray-500 mt-1">New Monitoring</span>
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex flex-col items-center p-4 h-auto hover:bg-red-50 hover:border-red-200 transition-colors"
-              onClick={() => navigate('/alerts')}
-            >
-              <AlertTriangle className="h-6 w-6 mb-2 text-red-600" />
-              <span className="text-sm font-medium">View Alerts</span>
-              <span className="text-xs text-gray-500 mt-1">{stats.alertsCount} Active</span>
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex flex-col items-center p-4 h-auto hover:bg-orange-50 hover:border-orange-200 transition-colors"
-              onClick={() => navigate('/exports')}
-            >
-              <Download className="h-6 w-6 mb-2 text-orange-600" />
-              <span className="text-sm font-medium">Export Data</span>
-              <span className="text-xs text-gray-500 mt-1">Download Files</span>
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex flex-col items-center p-4 h-auto hover:bg-gray-50 hover:border-gray-200 transition-colors"
-              onClick={() => navigate('/organizations')}
-            >
-              <Users className="h-6 w-6 mb-2 text-gray-600" />
-              <span className="text-sm font-medium">Manage Users</span>
-              <span className="text-xs text-gray-500 mt-1">User Admin</span>
-            </Button>
+            {hasPermission('view_data') && (
+              <Button 
+                variant="outline" 
+                className="flex flex-col items-center p-4 h-auto hover:bg-green-50 hover:border-green-200 transition-colors"
+                onClick={() => navigate('/satellite')}
+              >
+                <Satellite className="h-6 w-6 mb-2 text-green-600" />
+                <span className="text-sm font-medium">Process Data</span>
+                <span className="text-xs text-gray-500 mt-1">Satellite Analysis</span>
+              </Button>
+            )}
+            {hasPermission('generate_reports') && (
+              <Button 
+                variant="outline" 
+                className="flex flex-col items-center p-4 h-auto hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                onClick={() => navigate('/reports')}
+              >
+                <FileText className="h-6 w-6 mb-2 text-blue-600" />
+                <span className="text-sm font-medium">Generate Report</span>
+                <span className="text-xs text-gray-500 mt-1">Custom Reports</span>
+              </Button>
+            )}
+            {hasPermission('manage_regions') && (
+              <Button 
+                variant="outline" 
+                className="flex flex-col items-center p-4 h-auto hover:bg-purple-50 hover:border-purple-200 transition-colors"
+                onClick={() => navigate('/regions')}
+              >
+                <Plus className="h-6 w-6 mb-2 text-purple-600" />
+                <span className="text-sm font-medium">Add Region</span>
+                <span className="text-xs text-gray-500 mt-1">New Monitoring</span>
+              </Button>
+            )}
+            {hasPermission('view_data') && (
+              <Button 
+                variant="outline" 
+                className="flex flex-col items-center p-4 h-auto hover:bg-red-50 hover:border-red-200 transition-colors"
+                onClick={() => navigate('/alerts')}
+              >
+                <AlertTriangle className="h-6 w-6 mb-2 text-red-600" />
+                <span className="text-sm font-medium">View Alerts</span>
+                <span className="text-xs text-gray-500 mt-1">{stats.alertsCount} Active</span>
+              </Button>
+            )}
+            {hasPermission('export_data') && (
+              <Button 
+                variant="outline" 
+                className="flex flex-col items-center p-4 h-auto hover:bg-orange-50 hover:border-orange-200 transition-colors"
+                onClick={() => navigate('/exports')}
+              >
+                <Download className="h-6 w-6 mb-2 text-orange-600" />
+                <span className="text-sm font-medium">Export Data</span>
+                <span className="text-xs text-gray-500 mt-1">Download Files</span>
+              </Button>
+            )}
+            {hasPermission('manage_organizations') && (
+              <Button 
+                variant="outline" 
+                className="flex flex-col items-center p-4 h-auto hover:bg-gray-50 hover:border-gray-200 transition-colors"
+                onClick={() => navigate('/organizations')}
+              >
+                <Users className="h-6 w-6 mb-2 text-gray-600" />
+                <span className="text-sm font-medium">Manage Users</span>
+                <span className="text-xs text-gray-500 mt-1">User Admin</span>
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -802,4 +800,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-

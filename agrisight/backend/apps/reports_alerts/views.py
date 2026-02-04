@@ -1,4 +1,4 @@
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, status, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -33,6 +33,20 @@ class ReportListCreateView(generics.ListCreateAPIView):
             return Report.objects.filter(organization=user.organization).select_related('organization').prefetch_related('regions')
         else:
             return Report.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.user_type != 'admin':
+            if not user.organization:
+                raise serializers.ValidationError({'organization': 'Organization is required.'})
+            regions = serializer.validated_data.get('regions', [])
+            if regions:
+                allowed_regions = Region.objects.filter(organizations=user.organization, id__in=[r.id for r in regions])
+                if allowed_regions.count() != len(regions):
+                    raise serializers.ValidationError({'regions': 'One or more regions are not accessible.'})
+            serializer.save(organization=user.organization)
+        else:
+            serializer.save()
 
 
 class ReportDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -210,4 +224,3 @@ def download_report(request, pk):
     response = HttpResponse(content, content_type='text/plain')
     response['Content-Disposition'] = f'attachment; filename="report_{report.id}.txt"'
     return response
-

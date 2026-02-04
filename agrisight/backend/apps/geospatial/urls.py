@@ -27,5 +27,7 @@ urlpatterns = [
     # Crop Mappings
     path('crop-mappings/', views.CropMappingListCreateView.as_view(), name='crop-mapping-list-create'),
     path('crop-mappings/<int:pk>/', views.CropMappingDetailView.as_view(), name='crop-mapping-detail'),
-]
 
+    # Data Quality
+    path('data-quality/', views.data_quality_summary, name='data-quality-summary'),
+]

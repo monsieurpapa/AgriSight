@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.gis.db import models as gis_models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 from apps.users.models import TimeStampedModel
 from apps.organizations.models import Organization
 import uuid
@@ -40,8 +41,8 @@ class RegionAccess(TimeStampedModel):
         ('view', 'View Only'),
         ('analyze', 'Analysis Access'),
         ('full', 'Full Access'),
-    ))
-    start_date = models.DateField()
+    ), default='view')
+    start_date = models.DateField(default=timezone.localdate)
     end_date = models.DateField(null=True, blank=True)
     
     class Meta:
@@ -138,4 +139,3 @@ class CropMapping(TimeStampedModel):
     
     def __str__(self):
         return f"{self.crop.name} in {self.region.name} ({self.mapping_date})"
-

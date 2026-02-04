@@ -13,7 +13,7 @@ import 'leaflet/dist/leaflet.css';
 // Component to update map bounds when regions change
 const MapBoundsUpdater = ({ regions }) => {
   const map = useMap();
-  
+
   useEffect(() => {
     if (regions && regions.length > 0) {
       const bounds = regions
@@ -24,13 +24,13 @@ const MapBoundsUpdater = ({ regions }) => {
           return coords.map(coord => [coord[1], coord[0]]); // Leaflet expects [lat, lng]
         })
         .flat();
-      
+
       if (bounds.length > 0) {
         map.fitBounds(bounds, { padding: [20, 20] });
       }
     }
   }, [regions, map]);
-  
+
   return null;
 };
 
@@ -45,8 +45,7 @@ const MapView = () => {
     ndvi: true,
     evi: false,
     ndwi: false,
-    stressEvents: true,
-    satellite: false
+    stressEvents: true
   });
   const [opacity, setOpacity] = useState(80);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -58,16 +57,16 @@ const MapView = () => {
       try {
         setLoading(true);
         setError(null);
-        
+
         // Fetch regions and stress events in parallel
         const [regionsData, stressData] = await Promise.all([
           geospatialAPI.getRegions(),
           analyticsAPI.getStressEvents({ limit: 100 })
         ]);
-        
+
         setRegions(regionsData.results || []);
         setStressEvents(stressData.results || []);
-        
+
         // Set first region as selected by default
         if (regionsData.results && regionsData.results.length > 0) {
           setSelectedRegion(regionsData.results[0]);
@@ -87,7 +86,7 @@ const MapView = () => {
   useEffect(() => {
     const fetchVegetationData = async () => {
       if (!selectedRegion) return;
-      
+
       try {
         const data = await satelliteProcessingAPI.getRegionVegetationData(selectedRegion.id, { days: 30 });
         setVegetationData(data);
@@ -100,31 +99,55 @@ const MapView = () => {
     fetchVegetationData();
   }, [selectedRegion]);
 
+  const getSeverityLevel = (severity) => {
+    if (severity == null) {
+      return 'low';
+    }
+
+    const numericSeverity = Number(severity);
+    if (!Number.isNaN(numericSeverity)) {
+      if (numericSeverity >= 4) return 'high';
+      if (numericSeverity >= 2) return 'medium';
+      return 'low';
+    }
+
+    const normalized = String(severity).toLowerCase();
+    if (normalized === 'high' || normalized === 'medium' || normalized === 'low') {
+      return normalized;
+    }
+
+    return 'low';
+  };
+
+  const getLayerOpacity = () => {
+    return Math.max(0.1, Math.min(1, opacity / 100));
+  };
+
   // Get region style based on stress events
   const getRegionStyle = (region) => {
+    const layerOpacity = getLayerOpacity();
     const regionStressEvents = stressEvents.filter(event => event.region?.id === region.id);
-    const hasHighStress = regionStressEvents.some(event => event.severity === 'high');
-    const hasMediumStress = regionStressEvents.some(event => event.severity === 'medium');
-    
+    const hasHighStress = regionStressEvents.some(event => getSeverityLevel(event.severity) === 'high');
+    const hasMediumStress = regionStressEvents.some(event => getSeverityLevel(event.severity) === 'medium');
+
     if (hasHighStress) {
-      return { color: '#ef4444', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
+      return { color: '#ef4444', weight: 2, opacity: 0.9, fillOpacity: Math.min(1, layerOpacity * 0.6) };
     } else if (hasMediumStress) {
-      return { color: '#f59e0b', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
+      return { color: '#f59e0b', weight: 2, opacity: 0.85, fillOpacity: Math.min(1, layerOpacity * 0.45) };
     } else {
-      return { color: '#10b981', weight: 2, opacity: 0.8, fillOpacity: 0.2 };
+      return { color: '#10b981', weight: 2, opacity: 0.8, fillOpacity: Math.min(1, layerOpacity * 0.3) };
     }
   };
 
   // Get latest vegetation index for region
   const getLatestVegetationIndex = (regionId, indexType = 'NDVI') => {
     if (!vegetationData || selectedRegion?.id !== regionId) return null;
-    
+
     const indexData = vegetationData.filter(item => item.index_type === indexType);
     if (indexData.length === 0) return null;
-    
+
     return indexData.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
   };
-
   if (loading) {
     return (
       <div className="space-y-6">
@@ -164,9 +187,9 @@ const MapView = () => {
                 <p className="text-red-600 dark:text-red-300 mt-1">
                   {error}
                 </p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="mt-3"
                   onClick={() => window.location.reload()}
                 >
@@ -186,12 +209,12 @@ const MapView = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Interactive Map</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            {regions.length} regions • {stressEvents.length} stress events • {baseLayer} view
+            {regions.length} regions - {stressEvents.length} stress events - {baseLayer} view
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setIsFullscreen(!isFullscreen)}
           >
@@ -239,10 +262,10 @@ const MapView = () => {
                       url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
                     />
                   )}
-                  
+
                   {/* Update map bounds when regions change */}
                   <MapBoundsUpdater regions={regions} />
-                  
+
                   {/* Render regions */}
                   {regions.map((region) => (
                     region.geometry && (
@@ -258,13 +281,29 @@ const MapView = () => {
                           <div className="p-2">
                             <h3 className="font-semibold text-gray-900">{region.name}</h3>
                             <p className="text-sm text-gray-600">
-                              Area: {(region.area_hectares / 100).toFixed(1)} km²
+                              Area: {(region.area_hectares / 100).toFixed(1)} km^2
                             </p>
-                            {(() => {
+                            {layers.ndvi && (() => {
                               const latestNDVI = getLatestVegetationIndex(region.id, 'NDVI');
                               return latestNDVI ? (
                                 <p className="text-sm text-gray-600">
                                   Latest NDVI: {formatVegetationIndex(latestNDVI.mean_value)}
+                                </p>
+                              ) : null;
+                            })()}
+                            {layers.evi && (() => {
+                              const latestEVI = getLatestVegetationIndex(region.id, 'EVI');
+                              return latestEVI ? (
+                                <p className="text-sm text-gray-600">
+                                  Latest EVI: {formatVegetationIndex(latestEVI.mean_value)}
+                                </p>
+                              ) : null;
+                            })()}
+                            {layers.ndwi && (() => {
+                              const latestNDWI = getLatestVegetationIndex(region.id, 'NDWI');
+                              return latestNDWI ? (
+                                <p className="text-sm text-gray-600">
+                                  Latest NDWI: {formatVegetationIndex(latestNDWI.mean_value)}
                                 </p>
                               ) : null;
                             })()}
@@ -283,7 +322,6 @@ const MapView = () => {
                       </GeoJSON>
                     )
                   ))}
-                  
                   {/* Render stress events with enhanced visualization */}
                   {layers.stressEvents && (
                     <LayerGroup>
@@ -300,12 +338,13 @@ const MapView = () => {
                           centerLat = sum.lat / coords.length;
                           centerLng = sum.lng / coords.length;
                         }
-                        
-                        const severityColor = event.severity === 'high' ? '#ef4444' : 
-                                            event.severity === 'medium' ? '#f59e0b' : '#10b981';
-                        const severitySize = event.severity === 'high' ? 12 : 
-                                           event.severity === 'medium' ? 8 : 6;
-                        
+
+                        const severityLevel = getSeverityLevel(event.severity);
+                        const severityColor = severityLevel === 'high' ? '#ef4444' :
+                                            severityLevel === 'medium' ? '#f59e0b' : '#10b981';
+                        const severitySize = severityLevel === 'high' ? 12 :
+                                           severityLevel === 'medium' ? 8 : 6;
+
                         return (
                           <CircleMarker
                             key={`stress-marker-${event.id}`}
@@ -314,7 +353,7 @@ const MapView = () => {
                             pathOptions={{
                               color: severityColor,
                               fillColor: severityColor,
-                              fillOpacity: 0.7,
+                              fillOpacity: Math.max(0.25, getLayerOpacity()),
                               weight: 2,
                               opacity: 0.9
                             }}
@@ -332,15 +371,15 @@ const MapView = () => {
                                   </div>
                                   <div>
                                     <span className="font-medium text-gray-700">Severity:</span>
-                                    <Badge 
-                                      variant="outline" 
+                                    <Badge
+                                      variant="outline"
                                       className={`ml-2 ${
-                                        event.severity === 'high' ? 'border-red-500 text-red-700' :
-                                        event.severity === 'medium' ? 'border-yellow-500 text-yellow-700' :
+                                        severityLevel === 'high' ? 'border-red-500 text-red-700' :
+                                        severityLevel === 'medium' ? 'border-yellow-500 text-yellow-700' :
                                         'border-green-500 text-green-700'
                                       }`}
                                     >
-                                      {event.severity}
+                                      {severityLevel}
                                     </Badge>
                                   </div>
                                   <div>
@@ -355,7 +394,7 @@ const MapView = () => {
                                     <div>
                                       <span className="font-medium text-gray-700">Affected Area:</span>
                                       <span className="ml-2 text-gray-600">
-                                        {(event.affected_area_hectares / 100).toFixed(1)} km²
+                                        {(event.affected_area_hectares / 100).toFixed(1)} km^2
                                       </span>
                                     </div>
                                   )}
@@ -366,7 +405,7 @@ const MapView = () => {
                                     </div>
                                   )}
                                 </div>
-                </div>
+                              </div>
                             </Popup>
                           </CircleMarker>
                         );
@@ -378,7 +417,7 @@ const MapView = () => {
             </CardContent>
           </Card>
         </div>
-        
+
         <div className="lg:col-span-1 space-y-6">
           {/* Base Layer Selection */}
           <Card>
@@ -435,7 +474,7 @@ const MapView = () => {
                       <div className="w-3 h-3 rounded-full bg-green-500"></div>
                       NDVI
                     </div>
-                    <Checkbox 
+                    <Checkbox
                       checked={layers.ndvi}
                       onCheckedChange={(checked) => setLayers(prev => ({ ...prev, ndvi: checked }))}
                     />
@@ -445,17 +484,17 @@ const MapView = () => {
                       <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                       EVI
                     </div>
-                    <Checkbox 
+                    <Checkbox
                       checked={layers.evi}
                       onCheckedChange={(checked) => setLayers(prev => ({ ...prev, evi: checked }))}
                     />
-              </div>
-              <div className="flex items-center justify-between">
+                  </div>
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm">
                       <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
                       NDWI
                     </div>
-                    <Checkbox 
+                    <Checkbox
                       checked={layers.ndwi}
                       onCheckedChange={(checked) => setLayers(prev => ({ ...prev, ndwi: checked }))}
                     />
@@ -466,7 +505,7 @@ const MapView = () => {
               {/* Events */}
               <div className="space-y-3">
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Events</h4>
-              <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm">
                     <AlertTriangle className="h-4 w-4 text-red-500" />
                     Stress Events
@@ -474,7 +513,7 @@ const MapView = () => {
                       {stressEvents.length}
                     </Badge>
                   </div>
-                  <Checkbox 
+                  <Checkbox
                     checked={layers.stressEvents}
                     onCheckedChange={(checked) => setLayers(prev => ({ ...prev, stressEvents: checked }))}
                   />
@@ -487,17 +526,16 @@ const MapView = () => {
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Opacity</p>
                   <span className="text-xs text-gray-500">{opacity}%</span>
                 </div>
-                <Slider 
-                  value={[opacity]} 
+                <Slider
+                  value={[opacity]}
                   onValueChange={(value) => setOpacity(value[0])}
-                  max={100} 
+                  max={100}
                   step={5}
                   className="w-full"
                 />
               </div>
             </CardContent>
           </Card>
-          
           {/* Map Legend */}
           <Card>
             <CardHeader>
@@ -577,30 +615,58 @@ const MapView = () => {
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">{selectedRegion.name}</p>
                       <p className="text-gray-600 dark:text-gray-400">
-                        Area: {(selectedRegion.area_hectares / 100).toFixed(1)} km²
+                        Area: {(selectedRegion.area_hectares / 100).toFixed(1)} km^2
                       </p>
                     </div>
                   </div>
-                  
+
                   {(() => {
-                    const latestNDVI = getLatestVegetationIndex(selectedRegion.id, 'NDVI');
-                    return latestNDVI ? (
-                      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Latest NDVI</span>
-                          <Badge 
-                            variant="outline" 
-                            className={getVegetationIndexColor(latestNDVI.mean_value, 'NDVI')}
-                          >
-                            {getVegetationIndexLabel(latestNDVI.mean_value, 'NDVI')}
-                          </Badge>
+                    const indexTypes = [
+                      { key: 'ndvi', label: 'NDVI', type: 'NDVI' },
+                      { key: 'evi', label: 'EVI', type: 'EVI' },
+                      { key: 'ndwi', label: 'NDWI', type: 'NDWI' }
+                    ];
+                    const activeIndexTypes = indexTypes.filter(item => layers[item.key]);
+                    const indexCards = activeIndexTypes.map((item) => {
+                      const latest = getLatestVegetationIndex(selectedRegion.id, item.type);
+                      if (!latest) return null;
+
+                      return (
+                        <div key={item.type} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Latest {item.label}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className={getVegetationIndexColor(latest.mean_value, item.type)}
+                            >
+                              {getVegetationIndexLabel(latest.mean_value, item.type)}
+                            </Badge>
+                          </div>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">
+                            {formatVegetationIndex(latest.mean_value)}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatDate(latest.date)}
+                          </p>
                         </div>
-                        <p className="text-lg font-bold text-gray-900 dark:text-white">
-                          {formatVegetationIndex(latestNDVI.mean_value)}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDate(latestNDVI.date)}
-                        </p>
+                      );
+                    }).filter(Boolean);
+
+                    if (activeIndexTypes.length === 0) {
+                      return (
+                        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Enable a vegetation layer to view index data
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return indexCards.length > 0 ? (
+                      <div className="space-y-3">
+                        {indexCards}
                       </div>
                     ) : (
                       <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -608,7 +674,7 @@ const MapView = () => {
                       </div>
                     );
                   })()}
-                  
+
                   {(() => {
                     const regionStressEvents = stressEvents.filter(event => event.region?.id === selectedRegion.id);
                     return regionStressEvents.length > 0 ? (
@@ -622,7 +688,7 @@ const MapView = () => {
                         <div className="space-y-1">
                           {regionStressEvents.slice(0, 3).map((event, index) => (
                             <div key={index} className="text-xs text-red-600 dark:text-red-400">
-                              • {event.stress_type} ({event.severity})
+                              - {event.stress_type} ({getSeverityLevel(event.severity)})
                             </div>
                           ))}
                           {regionStressEvents.length > 3 && (
@@ -652,5 +718,3 @@ const MapView = () => {
 };
 
 export default MapView;
-
-

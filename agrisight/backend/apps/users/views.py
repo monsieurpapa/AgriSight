@@ -2,6 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
+from rest_framework.exceptions import PermissionDenied
 from .serializers import UserSerializer, UserCreateSerializer, UserUpdateSerializer
 
 User = get_user_model()
@@ -23,10 +24,13 @@ class UserListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         if user.user_type == 'admin':
             return User.objects.all().select_related('organization')
-        elif user.organization:
-            return User.objects.filter(organization=user.organization).select_related('organization')
-        else:
-            return User.objects.filter(id=user.id).select_related('organization')
+        return User.objects.filter(id=user.id).select_related('organization')
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.user_type != 'admin':
+            raise PermissionDenied('Only administrators can create users.')
+        serializer.save()
 
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -45,10 +49,23 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
         user = self.request.user
         if user.user_type == 'admin':
             return User.objects.all().select_related('organization')
-        elif user.organization:
-            return User.objects.filter(organization=user.organization).select_related('organization')
-        else:
-            return User.objects.filter(id=user.id).select_related('organization')
+        return User.objects.filter(id=user.id).select_related('organization')
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        instance = self.get_object()
+        if user.user_type == 'admin':
+            serializer.save()
+            return
+        if instance.id != user.id:
+            raise PermissionDenied('You can only update your own profile.')
+        serializer.save(user_type=instance.user_type, organization=instance.organization)
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if user.user_type != 'admin':
+            raise PermissionDenied('Only administrators can delete users.')
+        instance.delete()
 
 
 @api_view(['GET'])
@@ -68,4 +85,3 @@ def update_current_user(request):
         serializer.save()
         return Response(UserSerializer(request.user).data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-

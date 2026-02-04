@@ -10,7 +10,34 @@ from .serializers import (
     ConflictEventSerializer, ConflictEventCreateSerializer,
     StressEventSummarySerializer, ConflictEventSummarySerializer
 )
-from apps.geospatial.models import Region
+from apps.geospatial.models import Region, RegionAccess
+
+
+def normalize_severity_level(severity):
+    if severity is None:
+        return 'low'
+
+    try:
+        numeric = int(severity)
+    except (TypeError, ValueError):
+        normalized = str(severity).lower()
+        if normalized in ['high', 'medium', 'low']:
+            return normalized
+        return 'low'
+
+    if numeric >= 4:
+        return 'high'
+    if numeric >= 2:
+        return 'medium'
+    return 'low'
+
+
+def build_severity_summary(events):
+    summary = {'low': 0, 'medium': 0, 'high': 0}
+    for severity, count in events.values('severity').annotate(count=Count('id')).values_list('severity', 'count'):
+        level = normalize_severity_level(severity)
+        summary[level] = summary.get(level, 0) + count
+    return summary
 
 
 class AgriculturalStressEventListCreateView(generics.ListCreateAPIView):
@@ -30,9 +57,11 @@ class AgriculturalStressEventListCreateView(generics.ListCreateAPIView):
         if user.user_type == 'admin':
             return AgriculturalStressEvent.objects.all().select_related('region', 'crop_mapping__crop')
         elif user.organization:
-            accessible_regions = Region.objects.filter(organizations=user.organization)
+            accessible_region_ids = RegionAccess.objects.filter(
+                organization=user.organization
+            ).values_list('region_id', flat=True)
             return AgriculturalStressEvent.objects.filter(
-                region__in=accessible_regions
+                region_id__in=accessible_region_ids
             ).select_related('region', 'crop_mapping__crop')
         else:
             return AgriculturalStressEvent.objects.none()
@@ -53,9 +82,11 @@ class AgriculturalStressEventDetailView(generics.RetrieveUpdateDestroyAPIView):
         if user.user_type == 'admin':
             return AgriculturalStressEvent.objects.all().select_related('region', 'crop_mapping__crop')
         elif user.organization:
-            accessible_regions = Region.objects.filter(organizations=user.organization)
+            accessible_region_ids = RegionAccess.objects.filter(
+                organization=user.organization
+            ).values_list('region_id', flat=True)
             return AgriculturalStressEvent.objects.filter(
-                region__in=accessible_regions
+                region_id__in=accessible_region_ids
             ).select_related('region', 'crop_mapping__crop')
         else:
             return AgriculturalStressEvent.objects.none()
@@ -78,8 +109,10 @@ class ConflictEventListCreateView(generics.ListCreateAPIView):
         if user.user_type == 'admin':
             return ConflictEvent.objects.all().select_related('region')
         elif user.organization:
-            accessible_regions = Region.objects.filter(organizations=user.organization)
-            return ConflictEvent.objects.filter(region__in=accessible_regions).select_related('region')
+            accessible_region_ids = RegionAccess.objects.filter(
+                organization=user.organization
+            ).values_list('region_id', flat=True)
+            return ConflictEvent.objects.filter(region_id__in=accessible_region_ids).select_related('region')
         else:
             return ConflictEvent.objects.none()
 
@@ -99,8 +132,10 @@ class ConflictEventDetailView(generics.RetrieveUpdateDestroyAPIView):
         if user.user_type == 'admin':
             return ConflictEvent.objects.all().select_related('region')
         elif user.organization:
-            accessible_regions = Region.objects.filter(organizations=user.organization)
-            return ConflictEvent.objects.filter(region__in=accessible_regions).select_related('region')
+            accessible_region_ids = RegionAccess.objects.filter(
+                organization=user.organization
+            ).values_list('region_id', flat=True)
+            return ConflictEvent.objects.filter(region_id__in=accessible_region_ids).select_related('region')
         else:
             return ConflictEvent.objects.none()
 
@@ -110,17 +145,20 @@ class ConflictEventDetailView(generics.RetrieveUpdateDestroyAPIView):
 def stress_event_summary(request):
     """Get summary statistics for stress events."""
     user = request.user
+    region_id = request.GET.get('region_id')
     
     # Get accessible regions
     if user.user_type == 'admin':
         accessible_regions = Region.objects.all()
     elif user.organization:
-        accessible_regions = Region.objects.filter(organizations=user.organization)
+        accessible_regions = Region.objects.filter(regionaccess__organization=user.organization)
     else:
         accessible_regions = Region.objects.none()
     
     # Filter events by accessible regions
     events = AgriculturalStressEvent.objects.filter(region__in=accessible_regions)
+    if region_id:
+        events = events.filter(region_id=region_id)
     
     # Get date range from query parameters
     days = int(request.GET.get('days', 30))
@@ -130,14 +168,11 @@ def stress_event_summary(request):
     # Calculate statistics
     total_events = events.count()
     events_by_type = dict(events.values('stress_type').annotate(count=Count('id')).values_list('stress_type', 'count'))
-    events_by_severity = dict(events.values('severity').annotate(count=Count('id')).values_list('severity', 'count'))
+    events_by_severity = build_severity_summary(events)
     total_affected_area = events.aggregate(total=Sum('affected_area_hectares'))['total'] or 0
     
     # Get recent events
-    recent_events_data = AgriculturalStressEventSerializer(
-        recent_events.order_by('-detection_date')[:10],
-        many=True
-    ).data
+    recent_events_data = recent_events.order_by('-detection_date')[:10]
     
     summary_data = {
         'total_events': total_events,
@@ -156,17 +191,20 @@ def stress_event_summary(request):
 def conflict_event_summary(request):
     """Get summary statistics for conflict events."""
     user = request.user
+    region_id = request.GET.get('region_id')
     
     # Get accessible regions
     if user.user_type == 'admin':
         accessible_regions = Region.objects.all()
     elif user.organization:
-        accessible_regions = Region.objects.filter(organizations=user.organization)
+        accessible_regions = Region.objects.filter(regionaccess__organization=user.organization)
     else:
         accessible_regions = Region.objects.none()
     
     # Filter events by accessible regions
     events = ConflictEvent.objects.filter(region__in=accessible_regions)
+    if region_id:
+        events = events.filter(region_id=region_id)
     
     # Get date range from query parameters
     days = int(request.GET.get('days', 30))
@@ -179,10 +217,7 @@ def conflict_event_summary(request):
     events_by_intensity = dict(events.values('intensity').annotate(count=Count('id')).values_list('intensity', 'count'))
     
     # Get recent events
-    recent_events_data = ConflictEventSerializer(
-        recent_events.order_by('-event_date')[:10],
-        many=True
-    ).data
+    recent_events_data = recent_events.order_by('-event_date')[:10]
     
     summary_data = {
         'total_events': total_events,
@@ -193,4 +228,3 @@ def conflict_event_summary(request):
     
     serializer = ConflictEventSummarySerializer(summary_data)
     return Response(serializer.data)
-

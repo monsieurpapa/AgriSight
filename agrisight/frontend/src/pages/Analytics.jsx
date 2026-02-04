@@ -51,6 +51,31 @@ const Analytics = () => {
   const [correlationData, setCorrelationData] = useState(null);
   const [insights, setInsights] = useState([]);
 
+  const normalizeSeverityLevel = (severity) => {
+    if (severity == null) return 'low';
+    const numericSeverity = Number(severity);
+    if (!Number.isNaN(numericSeverity)) {
+      if (numericSeverity >= 4) return 'high';
+      if (numericSeverity >= 2) return 'medium';
+      return 'low';
+    }
+
+    const normalized = String(severity).toLowerCase();
+    if (normalized === 'high' || normalized === 'medium' || normalized === 'low') {
+      return normalized;
+    }
+    return 'low';
+  };
+
+  const normalizeSeverityCounts = (counts) => {
+    const normalized = { low: 0, medium: 0, high: 0 };
+    Object.entries(counts || {}).forEach(([severity, count]) => {
+      const level = normalizeSeverityLevel(severity);
+      normalized[level] += count;
+    });
+    return normalized;
+  };
+
   // Fetch analytics data
   useEffect(() => {
     const fetchAnalyticsData = async () => {
@@ -58,12 +83,13 @@ const Analytics = () => {
         setLoading(true);
         setError(null);
         
+        const regionParam = selectedRegion !== 'all' ? { region_id: selectedRegion } : {};
         // Fetch all analytics data in parallel
         const [stressData, conflictData, regionsData, trendAnalysis] = await Promise.all([
-          analyticsAPI.getStressEventSummary({ days: parseInt(selectedTimeRange) }),
-          analyticsAPI.getConflictEventSummary({ days: parseInt(selectedTimeRange) }),
+          analyticsAPI.getStressEventSummary({ days: parseInt(selectedTimeRange), ...regionParam }),
+          analyticsAPI.getConflictEventSummary({ days: parseInt(selectedTimeRange), ...regionParam }),
           geospatialAPI.getRegions(),
-          satelliteProcessingAPI.getTrendAnalysis({ days: parseInt(selectedTimeRange) })
+          satelliteProcessingAPI.getTrendAnalysis({ days: parseInt(selectedTimeRange), ...regionParam })
         ]);
         
         setStressSummary(stressData);
@@ -87,7 +113,7 @@ const Analytics = () => {
     };
 
     fetchAnalyticsData();
-  }, [selectedTimeRange]);
+  }, [selectedTimeRange, selectedRegion]);
 
   // Generate correlation analysis
   const generateCorrelationAnalysis = (stressData, conflictData, trendData) => {
@@ -129,7 +155,8 @@ const Analytics = () => {
     const insights = [];
     
     if (stressData) {
-      const highSeverityEvents = stressData.events_by_severity?.high || 0;
+      const normalizedSeverity = normalizeSeverityCounts(stressData.events_by_severity);
+      const highSeverityEvents = normalizedSeverity.high || 0;
       const totalEvents = stressData.total_events || 0;
       
       if (highSeverityEvents > totalEvents * 0.3) {
@@ -142,11 +169,11 @@ const Analytics = () => {
         });
       }
       
-      if (stressData.events_by_type?.drought > stressData.events_by_type?.flood) {
+      if ((stressData.events_by_type?.water || 0) > (stressData.events_by_type?.disease || 0)) {
         insights.push({
           type: 'info',
-          title: 'Drought Dominance',
-          description: 'Drought events are more prevalent than flood events in the selected period',
+          title: 'Water Stress Dominance',
+          description: 'Water stress events are more prevalent than disease events in the selected period',
           icon: TrendingDown,
           action: 'Monitor water resources'
         });
@@ -194,14 +221,14 @@ const Analytics = () => {
   const stressEventsByType = stressSummary ? Object.entries(stressSummary.events_by_type || {}).map(([type, count]) => ({
     name: type.charAt(0).toUpperCase() + type.slice(1),
     value: count,
-    color: type === 'drought' ? '#ef4444' : 
-           type === 'flood' ? '#3b82f6' : 
-           type === 'pest' ? '#f59e0b' : 
-           type === 'disease' ? '#8b5cf6' : '#10b981'
+    color: type === 'water' ? '#3b82f6' : 
+           type === 'disease' ? '#ef4444' : 
+           type === 'nutrient' ? '#f59e0b' : 
+           type === 'conflict' ? '#8b5cf6' : '#10b981'
   })) : [];
 
   // Process stress events by severity for bar chart
-  const stressEventsBySeverity = stressSummary ? Object.entries(stressSummary.events_by_severity || {}).map(([severity, count]) => ({
+  const stressEventsBySeverity = stressSummary ? Object.entries(normalizeSeverityCounts(stressSummary.events_by_severity)).map(([severity, count]) => ({
     severity: severity.charAt(0).toUpperCase() + severity.slice(1),
     count: count,
     color: severity === 'high' ? '#ef4444' : 
@@ -549,12 +576,14 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {stressSummary?.recent_events?.slice(0, 5).map((event) => (
+                {stressSummary?.recent_events?.slice(0, 5).map((event) => {
+                  const severityLevel = normalizeSeverityLevel(event.severity);
+                  return (
                   <div key={event.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className={`w-2 h-2 rounded-full ${
-                        event.severity === 'high' ? 'bg-red-500' :
-                        event.severity === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                        severityLevel === 'high' ? 'bg-red-500' :
+                        severityLevel === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
                       }`} />
                       <div>
                         <p className="font-medium text-gray-900 dark:text-white">
@@ -567,18 +596,19 @@ const Analytics = () => {
                     </div>
                     <div className="text-right">
                       <Badge variant="outline" className={
-                        event.severity === 'high' ? 'border-red-500 text-red-600' :
-                        event.severity === 'medium' ? 'border-yellow-500 text-yellow-600' : 
+                        severityLevel === 'high' ? 'border-red-500 text-red-600' :
+                        severityLevel === 'medium' ? 'border-yellow-500 text-yellow-600' : 
                         'border-green-500 text-green-600'
                       }>
-                        {event.severity}
+                        {severityLevel}
                       </Badge>
                       <p className="text-xs text-gray-500 mt-1">
                         {formatRelativeTime(event.detection_date)}
                       </p>
                     </div>
                   </div>
-                )) || (
+                  );
+                })} || (
                   <p className="text-gray-500 dark:text-gray-400 text-center py-8">
                     No recent stress events found
                   </p>
@@ -643,7 +673,7 @@ const Analytics = () => {
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={Object.entries(conflictSummary?.events_by_intensity || {}).map(([intensity, count]) => ({
-                      intensity: intensity.charAt(0).toUpperCase() + intensity.slice(1),
+                      intensity: `Level ${String(intensity)}`,
                       count: count
                     }))}>
                       <CartesianGrid strokeDasharray="3 3" />

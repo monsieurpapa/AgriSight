@@ -16,4 +16,9 @@ urlpatterns = [
     # Statistics and monitoring
     path('statistics/', views.get_processing_statistics, name='processing_statistics'),
     path('image/<uuid:image_id>/', views.get_satellite_image_details, name='image_details'),
+
+    # Batch V2 endpoints
+    path('batch/process/', views.trigger_batch_processing_view, name='trigger_batch_processing'),
+    path('batch/region/<uuid:region_id>/', views.get_region_batch_jobs, name='region_batch_jobs'),
+    path('batch/status/<str:job_id>/', views.get_batch_job_status, name='batch_job_status'),
 ]

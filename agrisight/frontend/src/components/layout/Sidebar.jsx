@@ -14,7 +14,8 @@ import {
   TrendingUp,
   Bell,
   Download,
-  X
+  X,
+  KeyRound
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -128,6 +129,20 @@ const Sidebar = ({ isOpen, onClose }) => {
           permission: 'manage_organizations',
         },
         {
+          name: 'Users',
+          href: '/admin/users',
+          icon: Users,
+          description: 'Manage users and roles',
+          permission: 'admin_access',
+        },
+        {
+          name: 'API Keys',
+          href: '/admin/api-keys',
+          icon: KeyRound,
+          description: 'Manage API keys',
+          permission: 'admin_access',
+        },
+        {
           name: 'System Settings',
           href: '/admin/settings',
           icon: Settings,
@@ -195,6 +210,16 @@ const Sidebar = ({ isOpen, onClose }) => {
 
         {/* Navigation */}
         <nav className="flex-1 px-4 py-4 space-y-6 overflow-y-auto scrollbar-thin">
+          {filteredNavigationItems.length === 0 && (
+            <div className="px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
+              No modules are available for your account yet.
+              <div className="mt-2">
+                <Link to="/profile" onClick={onClose} className="text-green-600 hover:underline">
+                  View profile
+                </Link>
+              </div>
+            </div>
+          )}
           {filteredNavigationItems.map((section) => (
             <div key={section.title}>
               <h3 className="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
@@ -269,4 +294,3 @@ const Sidebar = ({ isOpen, onClose }) => {
 };
 
 export default Sidebar;
-

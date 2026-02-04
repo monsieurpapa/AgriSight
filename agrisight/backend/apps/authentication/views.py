@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from django.http import HttpResponse
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.conf import settings
@@ -48,11 +49,25 @@ class CustomLoginView(BaseLoginView):
     - With exemption, frontend's CSRF token (in header) prevents CSRF attacks,
       session is established, and subsequent requests are session-protected.
     """
-    pass
+    def post(self, request, *args, **kwargs):
+        self.request = request
+        self.serializer = self.get_serializer(data=self.request.data)
+        if not self.serializer.is_valid():
+            if settings.DEBUG:
+                return Response(
+                    {"detail": "Login failed", "errors": self.serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                {"detail": "Unable to log in with provided credentials."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        self.login()
+        return self.get_response()
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-@method_decorator(ratelimit(key='ip', rate='3/1h', method='POST'), name='post')
+@method_decorator(ratelimit(key='ip', rate='3/1h', method='POST', block=False), name='post')
 class CustomRegisterView(BaseRegisterView):
     """
     Custom registration view with rate limiting and custom serializer.
@@ -197,6 +212,22 @@ def auth_config(request):
     """
     Get authentication configuration for frontend.
     """
+    role_permissions = {
+        'admin': ['*'],
+        'humanitarian': ['view_data', 'export_data', 'generate_reports', 'view_analytics'],
+        'cooperative': ['view_data', 'view_analytics', 'manage_regions', 'view_stress_events'],
+        'government': ['view_data', 'view_analytics', 'manage_organizations', 'view_all_regions'],
+        'researcher': ['view_data', 'view_analytics', 'export_data', 'view_stress_events', 'view_conflict_events']
+    }
+
+    role_labels = {
+        'admin': 'Administrator',
+        'humanitarian': 'Humanitarian',
+        'cooperative': 'Cooperative',
+        'government': 'Government',
+        'researcher': 'Researcher'
+    }
+
     return Response({
         'social_providers': {
             'google': {
@@ -212,13 +243,17 @@ def auth_config(request):
                 'name': 'GitHub'
             }
         },
-        'email_verification_required': False,  # Updated to match settings
+        'email_verification_required': True,
         'password_requirements': {
             'min_length': 8,
-            'require_uppercase': False,
-            'require_lowercase': False,
-            'require_numbers': False,
+            'require_uppercase': True,
+            'require_lowercase': True,
+            'require_numbers': True,
             'require_symbols': False
+        },
+        'rbac': {
+            'role_permissions': role_permissions,
+            'role_labels': role_labels
         }
     })
 
@@ -233,6 +268,15 @@ def get_csrf_token(request):
     return Response({
         'csrfToken': get_token(request)
     })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def password_reset_confirm_stub(request, uidb64=None, token=None):
+    """
+    Stub view for password reset confirm URL resolution in emails.
+    """
+    return HttpResponse(status=204)
 
 
 

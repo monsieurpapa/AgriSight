@@ -89,37 +89,48 @@ export const satelliteProcessingAPI = {
   triggerProcessing(payload) {
     return post('/api/v1/satellite-processing/process/', payload);
   },
-  
+
   // Get processing status
   getProcessingStatus(taskId) {
     return get(`/api/v1/satellite-processing/status/${taskId}/`);
   },
-  
+
   // Get vegetation data for a region
   getRegionVegetationData(regionId, params = {}) {
     const queryParams = new URLSearchParams(params).toString();
     return get(`/api/v1/satellite-processing/vegetation/${regionId}/${queryParams ? '?' + queryParams : ''}`);
   },
-  
+
   // Manual data ingestion
   manualDataIngestion(payload) {
     return post('/api/v1/satellite-processing/ingest/', payload);
   },
-  
+
   // Get trend analysis
   getTrendAnalysis(params = {}) {
     const queryParams = new URLSearchParams(params).toString();
     return get(`/api/v1/satellite-processing/trend-analysis/${queryParams ? '?' + queryParams : ''}`);
   },
-  
+
   // Get processing statistics
   getProcessingStatistics() {
     return get('/api/v1/satellite-processing/statistics/');
   },
-  
+
   // Get satellite image details
   getSatelliteImageDetails(imageId) {
     return get(`/api/v1/satellite-processing/image/${imageId}/`);
+  },
+
+  // Batch V2
+  triggerBatchProcessing(payload) {
+    return post('/api/v1/satellite-processing/batch/process/', payload);
+  },
+  getRegionBatchJobs(regionId) {
+    return get(`/api/v1/satellite-processing/batch/region/${regionId}/`);
+  },
+  getBatchJobStatus(jobId) {
+    return get(`/api/v1/satellite-processing/batch/status/${jobId}/`);
   }
 };
 
@@ -130,19 +141,19 @@ export const analyticsAPI = {
     const queryParams = new URLSearchParams(params).toString();
     return get(`/api/v1/analytics/stress-events/${queryParams ? '?' + queryParams : ''}`);
   },
-  
+
   // Get stress event summary
   getStressEventSummary(params = {}) {
     const queryParams = new URLSearchParams(params).toString();
     return get(`/api/v1/analytics/stress-events/summary/${queryParams ? '?' + queryParams : ''}`);
   },
-  
+
   // Get conflict events
   getConflictEvents(params = {}) {
     const queryParams = new URLSearchParams(params).toString();
     return get(`/api/v1/analytics/conflict-events/${queryParams ? '?' + queryParams : ''}`);
   },
-  
+
   // Get conflict event summary
   getConflictEventSummary(params = {}) {
     const queryParams = new URLSearchParams(params).toString();
@@ -159,19 +170,24 @@ export const geospatialAPI = {
   getRegion(id) {
     return get(`/api/v1/geospatial/regions/${id}/`);
   },
-  
+
   // Vegetation indices
   getVegetationIndices(params = {}) {
     const queryParams = new URLSearchParams(params).toString();
     return get(`/api/v1/geospatial/vegetation-indices/${queryParams ? '?' + queryParams : ''}`);
   },
-  
+
   // Satellite images
   getSatelliteImages(params = {}) {
     const queryParams = new URLSearchParams(params).toString();
     return get(`/api/v1/geospatial/satellite-images/${queryParams ? '?' + queryParams : ''}`);
   },
-  
+
+  // Data quality summary
+  getDataQualitySummary() {
+    return get('/api/v1/geospatial/data-quality/');
+  },
+
   // Crops
   getCrops() {
     return get('/api/v1/geospatial/crops/');
@@ -181,25 +197,45 @@ export const geospatialAPI = {
 // Dashboard API - consolidated endpoint for dashboard data
 export const dashboardAPI = {
   // Get comprehensive dashboard data
-  getDashboardData() {
-    return Promise.all([
+  async getDashboardData(options = {}) {
+    const includeOrganizations = options.includeOrganizations === true;
+    const requests = [
       satelliteProcessingAPI.getProcessingStatistics(),
       analyticsAPI.getStressEventSummary({ days: 30 }),
       analyticsAPI.getConflictEventSummary({ days: 30 }),
       geospatialAPI.getRegions(),
       alertsAPI.getAlerts(),
-      reportsAPI.getReports()
-    ]).then(([processingStats, stressSummary, conflictSummary, regions, alerts, reports]) => {
-      return {
-        processingStats,
-        stressSummary,
-        conflictSummary,
-        regions,
-        alerts,
-        reports,
-        lastUpdate: new Date().toISOString()
-      };
-    });
+      reportsAPI.getReports(),
+      includeOrganizations ? organizationsAPI.getOrganizations() : Promise.resolve(null),
+    ];
+
+    const results = await Promise.allSettled(requests);
+    const values = results.map((result) => (result.status === 'fulfilled' ? result.value : null));
+    const errors = results
+      .map((result, index) => (result.status === 'rejected' ? { index, error: result.reason } : null))
+      .filter(Boolean);
+
+    const [
+      processingStats,
+      stressSummary,
+      conflictSummary,
+      regions,
+      alerts,
+      reports,
+      organizations,
+    ] = values;
+
+    return {
+      processingStats,
+      stressSummary,
+      conflictSummary,
+      regions,
+      alerts,
+      reports,
+      organizations,
+      errors,
+      lastUpdate: new Date().toISOString()
+    };
   }
 };
 
@@ -298,6 +334,9 @@ export const apiKeysAPI = {
   },
   deleteAPIKey(id) {
     return del(`/api/v1/api-keys/keys/${id}/`);
+  },
+  regenerateAPIKey(id) {
+    return post(`/api/v1/api-keys/keys/${id}/regenerate/`);
   },
   getAnalyticsLogs(params = {}) {
     const queryParams = new URLSearchParams(params).toString();

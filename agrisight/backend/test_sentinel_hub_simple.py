@@ -9,33 +9,44 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 import requests
 
-# Add the apps directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'apps'))
 
-# Mock Django settings
-class MockSettings:
-    SENTINEL_HUB_CLIENT_ID = 'test_client_id'
-    SENTINEL_HUB_CLIENT_SECRET = 'test_client_secret'
+def _bootstrap_mock_django():
+    # Add the apps directory to Python path
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'apps'))
 
-# Mock Django
-class MockDjango:
-    conf = MockSettings()
+    # Mock Django settings
+    class MockSettings:
+        SENTINEL_HUB_CLIENT_ID = 'test_client_id'
+        SENTINEL_HUB_CLIENT_SECRET = 'test_client_secret'
 
-sys.modules['django'] = MockDjango()
-sys.modules['django.conf'] = MockDjango()
+    # Mock Django
+    class MockDjango:
+        conf = MockSettings()
 
-# Import our modules
-from sentinel_hub.client import SentinelHubClient
-from sentinel_hub.utils import (
-    format_datetime_for_sentinel, get_time_range_for_period,
-    validate_bbox, is_valid_vegetation_index_value
-)
+    sys.modules['django'] = MockDjango()
+    sys.modules['django.conf'] = MockDjango()
+
+
+def _get_client_modules():
+    from sentinel_hub.client import SentinelHubClient
+    from sentinel_hub.utils import (
+        format_datetime_for_sentinel, get_time_range_for_period,
+        validate_bbox, is_valid_vegetation_index_value
+    )
+    return (
+        SentinelHubClient,
+        format_datetime_for_sentinel,
+        get_time_range_for_period,
+        validate_bbox,
+        is_valid_vegetation_index_value,
+    )
 
 
 def test_sentinel_hub_client():
     """Test SentinelHubClient functionality"""
     print("Testing SentinelHubClient...")
-    
+
+    SentinelHubClient, _, _, _, _ = _get_client_modules()
     client = SentinelHubClient()
     client.client_id = 'test_client_id'
     client.client_secret = 'test_client_secret'
@@ -65,7 +76,9 @@ def test_sentinel_hub_client():
 def test_utility_functions():
     """Test utility functions"""
     print("\nTesting utility functions...")
-    
+
+    _, format_datetime_for_sentinel, get_time_range_for_period, validate_bbox, is_valid_vegetation_index_value = _get_client_modules()
+
     # Test datetime formatting
     dt = datetime(2023, 10, 15, 12, 30, 45)
     formatted = format_datetime_for_sentinel(dt)
@@ -95,7 +108,8 @@ def test_utility_functions():
 def test_mock_api_request():
     """Test API request with mocked responses"""
     print("\nTesting mocked API requests...")
-    
+
+    SentinelHubClient, _, _, _, _ = _get_client_modules()
     client = SentinelHubClient()
     client.client_id = 'test_client_id'
     client.client_secret = 'test_client_secret'
@@ -138,7 +152,8 @@ def test_mock_api_request():
 def test_vegetation_index_request():
     """Test vegetation index request"""
     print("\nTesting vegetation index requests...")
-    
+
+    SentinelHubClient, _, _, _, _ = _get_client_modules()
     client = SentinelHubClient()
     
     # Test invalid index type
@@ -179,6 +194,8 @@ def main():
     """Run all tests"""
     print("Running Sentinel Hub Integration Tests")
     print("=" * 50)
+
+    _bootstrap_mock_django()
     
     try:
         test_sentinel_hub_client()
@@ -206,4 +223,3 @@ def main():
 if __name__ == '__main__':
     success = main()
     sys.exit(0 if success else 1)
-

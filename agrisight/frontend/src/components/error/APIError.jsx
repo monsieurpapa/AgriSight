@@ -149,7 +149,7 @@ const APIError = ({
               {getErrorDescription(status, message)}
             </p>
             
-            {process.env.NODE_ENV === 'development' && error && (
+            {import.meta.env.DEV && error && (
               <div className="mt-4 p-3 bg-red-100 dark:bg-red-900/20 rounded-lg">
                 <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">
                   Debug Information:

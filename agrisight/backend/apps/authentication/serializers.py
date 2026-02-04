@@ -1,5 +1,7 @@
 from rest_framework import serializers
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from allauth.account.models import EmailAddress
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import UserDetailsSerializer
 from allauth.account.adapter import get_adapter
@@ -180,6 +182,64 @@ class SocialLoginSerializer(serializers.Serializer):
         required=False,
         help_text="Authorization code from social provider"
     )
+
+
+class CustomLoginSerializer(serializers.Serializer):
+    """
+    Login serializer that accepts email or username and returns a clear error on failure.
+    """
+    email = serializers.EmailField(required=False, allow_blank=True)
+    username = serializers.CharField(required=False, allow_blank=True)
+    password = serializers.CharField(trim_whitespace=False)
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        email = (attrs.get('email') or '').strip()
+        username = (attrs.get('username') or '').strip()
+        password = attrs.get('password')
+
+        if not email and not username:
+            raise serializers.ValidationError({'non_field_errors': ['Email or username is required.']})
+
+        user = None
+        if email:
+            user = User.objects.filter(email__iexact=email).first()
+            if user and not user.check_password(password):
+                user = None
+
+        if not user and username:
+            user = User.objects.filter(username__iexact=username).first()
+            if user and not user.check_password(password):
+                user = None
+
+        if not user and email and not username:
+            # Fallback for legacy setups where email is stored in username
+            user = User.objects.filter(username__iexact=email).first()
+            if user and not user.check_password(password):
+                user = None
+
+        if not user:
+            raise serializers.ValidationError({'non_field_errors': ['Unable to log in with provided credentials.']})
+
+        if not user.is_active:
+            raise serializers.ValidationError({'non_field_errors': ['User account is disabled.']})
+
+        if getattr(settings, 'ACCOUNT_EMAIL_VERIFICATION', 'optional') == 'mandatory':
+            email_qs = EmailAddress.objects.filter(user=user)
+            if settings.DEBUG or user.is_staff or user.is_superuser:
+                if not email_qs.exists():
+                    EmailAddress.objects.create(user=user, email=user.email, verified=True, primary=True)
+                else:
+                    email_qs.filter(verified=False).update(verified=True)
+            else:
+                if not email_qs.exists():
+                    EmailAddress.objects.create(user=user, email=user.email, verified=False, primary=True)
+                    raise serializers.ValidationError({'non_field_errors': ['E-mail is not verified.']})
+                elif not email_qs.filter(verified=True).exists():
+                    raise serializers.ValidationError({'non_field_errors': ['E-mail is not verified.']})
+
+        attrs['user'] = user
+        return attrs
 
 
 

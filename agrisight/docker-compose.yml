@@ -115,10 +115,10 @@ services:
     build: 
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /
     ports:
       - "3000:80"
-    environment:
-      - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
     healthcheck:
@@ -171,4 +171,3 @@ volumes:
   satellite_data:
   docker_certs:
   docker_data:
-

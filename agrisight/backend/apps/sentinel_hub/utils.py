@@ -160,6 +160,7 @@ def calculate_area_km2(bbox: List[float]) -> float:
     
     # Create polygon from bbox
     polygon = Polygon.from_bbox(bbox)
+    polygon.srid = 4326
     
     # Transform to appropriate projected CRS for area calculation
     # Using Web Mercator (EPSG:3857) for approximate calculation
@@ -243,4 +244,3 @@ def is_valid_vegetation_index_value(value: float, index_type: str) -> bool:
     
     min_val, max_val = valid_ranges[index_type.lower()]
     return min_val <= value <= max_val
-

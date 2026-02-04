@@ -2,6 +2,7 @@ from rest_framework import generics, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from apps.authentication.permissions import CanManageOrganizations
 from .models import Organization, SubscriptionPlan
 from .serializers import (
     OrganizationSerializer, OrganizationCreateSerializer, OrganizationUpdateSerializer,
@@ -29,7 +30,7 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
     """List all organizations or create a new organization."""
     
     queryset = Organization.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CanManageOrganizations]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['organization_type', 'subscription_plan', 'is_active']
     
@@ -54,7 +55,7 @@ class OrganizationDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update or delete an organization."""
     
     queryset = Organization.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CanManageOrganizations]
     
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -82,4 +83,3 @@ def current_organization(request):
         return Response(serializer.data)
     else:
         return Response({'detail': 'User is not associated with any organization.'}, status=404)
-

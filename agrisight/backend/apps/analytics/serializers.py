@@ -7,7 +7,7 @@ class AgriculturalStressEventSerializer(GeoFeatureModelSerializer):
     """GeoJSON serializer for AgriculturalStressEvent model."""
     
     region_name = serializers.CharField(source='region.name', read_only=True)
-    crop_name = serializers.CharField(source='crop_mapping.crop.name', read_only=True)
+    crop_name = serializers.SerializerMethodField()
     evidence_count = serializers.SerializerMethodField()
     
     class Meta:
@@ -24,6 +24,11 @@ class AgriculturalStressEventSerializer(GeoFeatureModelSerializer):
     def get_evidence_count(self, obj):
         """Get the number of vegetation indices used as evidence."""
         return obj.evidence_indices.count()
+
+    def get_crop_name(self, obj):
+        if obj.crop_mapping and obj.crop_mapping.crop:
+            return obj.crop_mapping.crop.name
+        return None
 
 
 class AgriculturalStressEventCreateSerializer(serializers.ModelSerializer):
@@ -82,4 +87,3 @@ class ConflictEventSummarySerializer(serializers.Serializer):
     events_by_type = serializers.DictField()
     events_by_intensity = serializers.DictField()
     recent_events = ConflictEventSerializer(many=True)
-

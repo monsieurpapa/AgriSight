@@ -90,7 +90,7 @@ const ErrorNotification = ({ error, onDismiss }) => {
 
         <div className="flex-1">
           <p className="font-medium">{message}</p>
-          {process.env.NODE_ENV === 'development' && (
+          {import.meta.env.DEV && (
             <div className="mt-2 text-xs opacity-70">
               <p>Type: {type}</p>
               {status && <p>Status: {status}</p>}

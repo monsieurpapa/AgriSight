@@ -96,6 +96,7 @@ export function getErrorMessage(error) {
     const data = response.data;
     if (typeof data === 'string') return data;
     if (data?.detail) return asString(data.detail);
+    if (data?.errors) return asString(data.errors);
     if (data?.message) return asString(data.message);
     if (typeof data === 'object') {
       // Collect first field error

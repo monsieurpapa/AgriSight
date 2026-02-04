@@ -218,7 +218,7 @@ class PerformanceMonitor {
 const performanceMonitor = new PerformanceMonitor();
 
 // Expose in development
-if (process.env.NODE_ENV === 'development') {
+if (import.meta.env.DEV) {
   window.performanceMonitor = performanceMonitor;
 }
 
@@ -234,7 +234,7 @@ export const useRenderTime = (componentName) => {
     const duration = performance.now() - startTimeRef.current;
     performanceMonitor.recordMetric('render', componentName, duration);
 
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log(
         `⏱️  ${componentName} rendered in ${duration.toFixed(2)}ms`
       );

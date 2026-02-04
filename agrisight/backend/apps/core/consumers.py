@@ -10,6 +10,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.models import Session
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from apps.geospatial.models import Region
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,15 @@ class AgriSightConsumer(AsyncWebsocketConsumer):
         """Handle WebSocket connection."""
         self.room_name = "agrisight_updates"
         self.room_group_name = f"agrisight_{self.room_name}"
-        
+
+        # Use session-based auth if available via AuthMiddlewareStack
+        self.user = self.scope.get('user')
+        if self.user and getattr(self.user, 'is_authenticated', False):
+            self.authenticated = True
+        else:
+            await self.close(code=4001)
+            return
+
         # Join room group
         await self.channel_layer.group_add(
             self.room_group_name,
@@ -110,11 +119,25 @@ class AgriSightConsumer(AsyncWebsocketConsumer):
             return
         
         channel = data.get('channel')
+        if channel not in ['region_updates', 'processing_updates', 'system_alerts']:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'Unsupported channel'
+            }))
+            return
         group_name = f"agrisight_{channel}"
         
         # Add specific identifiers to group name
         if channel == 'region_updates' and data.get('region_id'):
-            group_name += f"_{data['region_id']}"
+            region_id = data.get('region_id')
+            has_access = await self.user_has_region_access(region_id)
+            if not has_access:
+                await self.send(text_data=json.dumps({
+                    'type': 'error',
+                    'message': 'Access denied to region updates'
+                }))
+                return
+            group_name += f"_{region_id}"
         elif channel == 'processing_updates' and data.get('task_id'):
             group_name += f"_{data['task_id']}"
         
@@ -170,6 +193,16 @@ class AgriSightConsumer(AsyncWebsocketConsumer):
             pass
         return None
 
+    @database_sync_to_async
+    def user_has_region_access(self, region_id):
+        if not region_id:
+            return False
+        if self.user.user_type == 'admin':
+            return Region.objects.filter(id=region_id).exists()
+        if self.user.organization:
+            return Region.objects.filter(id=region_id, organizations=self.user.organization).exists()
+        return False
+
     # Message handlers for different types of updates
     async def stress_event_update(self, event):
         """Handle stress event updates."""
@@ -213,6 +246,16 @@ class RegionUpdatesConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.region_id = self.scope['url_route']['kwargs']['region_id']
         self.room_group_name = f'agrisight_region_{self.region_id}'
+        self.user = self.scope.get('user')
+
+        if not self.user or not getattr(self.user, 'is_authenticated', False):
+            await self.close(code=4001)
+            return
+
+        has_access = await self.user_has_region_access(self.region_id)
+        if not has_access:
+            await self.close(code=4003)
+            return
 
         await self.channel_layer.group_add(
             self.room_group_name,
@@ -241,3 +284,11 @@ class RegionUpdatesConsumer(AsyncWebsocketConsumer):
 
     async def region_update(self, event):
         await self.send(text_data=json.dumps(event['data']))
+
+    @database_sync_to_async
+    def user_has_region_access(self, region_id):
+        if self.user.user_type == 'admin':
+            return Region.objects.filter(id=region_id).exists()
+        if self.user.organization:
+            return Region.objects.filter(id=region_id, organizations=self.user.organization).exists()
+        return False

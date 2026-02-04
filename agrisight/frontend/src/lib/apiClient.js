@@ -1,7 +1,27 @@
 import axios from 'axios';
 
-// Backend serves API at /api/v1/ so base URL should not include /api
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Backend serves API at /api/ so base URL should not include /api
+const resolveBaseUrl = () => {
+  const envBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+  const normalized =
+    envBase && envBase !== '/'
+      ? envBase.replace(/\/$/, '')
+      : '';
+
+  if (normalized) return normalized;
+
+  if (import.meta.env.DEV) {
+    return 'http://localhost:8000';
+  }
+
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return '';
+};
+
+const API_BASE_URL = resolveBaseUrl();
 
 // Debug: Log the resolved API base URL
 console.log('API Client - Resolved API_BASE_URL:', API_BASE_URL);
@@ -53,7 +73,7 @@ http.interceptors.request.use(
 http.interceptors.response.use(
   (response) => {
     // Log successful requests in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       const duration = new Date() - response.config.metadata.startTime;
       console.log(`✅ ${response.config.method?.toUpperCase()} ${response.config.url} (${duration}ms)`);
     }
@@ -118,7 +138,7 @@ http.interceptors.response.use(
     }
 
     // Log errors in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.error('❌ API Error:', apiError);
       if (originalRequest._retryMetadata.count > 0) {
         console.info(
@@ -158,6 +178,8 @@ const createAPIError = (error, type = 'API_ERROR') => {
       apiError.message = error.response.data.message;
     } else if (error.response.data?.detail) {
       apiError.message = error.response.data.detail;
+    } else if (error.response.data?.errors) {
+      apiError.message = JSON.stringify(error.response.data.errors);
     } else if (error.response.data?.error) {
       apiError.message = error.response.data.error;
     } else if (typeof error.response.data === 'string') {
