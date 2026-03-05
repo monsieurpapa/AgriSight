@@ -4,10 +4,12 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from apps.users.models import TimeStampedModel
 from apps.organizations.models import Organization
+from apps.core.models import SoftDeleteModel
+from simple_history.models import HistoricalRecords
 import uuid
 
 
-class Region(TimeStampedModel):
+class Region(TimeStampedModel, SoftDeleteModel):
     """
     Geographical regions being monitored.
     Uses GeoDjango for spatial data.
@@ -19,6 +21,8 @@ class Region(TimeStampedModel):
     country = models.CharField(max_length=100)
     province = models.CharField(max_length=100)
     organizations = models.ManyToManyField(Organization, through='RegionAccess')
+    
+    history = HistoricalRecords()
     
     def __str__(self):
         return f"{self.name}, {self.province}, {self.country}"

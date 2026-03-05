@@ -130,3 +130,35 @@ dmypy.json
 
 # local files
 cache/
+
+# Node / frontend
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+dist/
+.vite/
+.eslintcache
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
+*.tsbuildinfo
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker / runtime
+*.pid
+*.sock
+docker-data/
+**/logs/
+**/tmp/
+
+# Local overrides
+.env.local
+.env.*.local

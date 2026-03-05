@@ -51,6 +51,7 @@ THIRD_PARTY_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'rest_framework.authtoken',
+    'simple_history',
 ]
 
 LOCAL_APPS = [
@@ -86,6 +87,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'simple_history.middleware.HistoryRequestMiddleware',
 ]
 
 ROOT_URLCONF = 'agrisight.urls'
@@ -117,6 +119,7 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD', default='agrisight_password'),
         'HOST': config('DB_HOST', default='postgres'),
         'PORT': config('DB_PORT', default='5432'),
+        'CONN_MAX_AGE': 600,  # 10 minutes
     }
 }
 
@@ -406,3 +409,15 @@ CHANNEL_LAYERS = {
     },
 }
 
+# Sentry Error Tracking (Ready for Production)
+# import sentry_sdk
+# from sentry_sdk.integrations.django import DjangoIntegration
+# 
+# SENTRY_DSN = config('SENTRY_DSN', default=None)
+# if SENTRY_DSN:
+#     sentry_sdk.init(
+#         dsn=SENTRY_DSN,
+#         integrations=[DjangoIntegration()],
+#         traces_sample_rate=1.0,
+#         send_default_pii=True
+#     )

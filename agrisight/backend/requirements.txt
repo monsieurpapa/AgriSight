@@ -53,3 +53,6 @@ django-ratelimit==4.1.0
 # WebSocket support
 channels==4.0.0
 channels-redis==4.1.0
+
+# Launch Readiness Enhancements
+django-simple-history==3.4.0

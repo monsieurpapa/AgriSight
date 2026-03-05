@@ -1,8 +1,10 @@
 from django.db import models
 from apps.users.models import TimeStampedModel
+from apps.core.models import SoftDeleteModel
+from simple_history.models import HistoricalRecords
 
 
-class Organization(TimeStampedModel):
+class Organization(TimeStampedModel, SoftDeleteModel):
     """
     Represents B2B client organizations using the platform.
     """
@@ -14,11 +16,13 @@ class Organization(TimeStampedModel):
     contact_phone = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
     
+    history = HistoricalRecords()
+    
     def __str__(self):
         return self.name
 
 
-class SubscriptionPlan(TimeStampedModel):
+class SubscriptionPlan(TimeStampedModel, SoftDeleteModel):
     """
     Different subscription tiers for B2B clients.
     """
@@ -30,6 +34,8 @@ class SubscriptionPlan(TimeStampedModel):
     max_regions = models.PositiveIntegerField()
     features = models.JSONField(default=dict)
     is_active = models.BooleanField(default=True)
+    
+    history = HistoricalRecords()
     
     def __str__(self):
         return self.name

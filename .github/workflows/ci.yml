@@ -1,0 +1,61 @@
+name: AgriSight CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  backend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r agrisight/backend/requirements.txt
+          
+      - name: Run Backend Tests
+        run: |
+          cd agrisight/backend
+          # Mocking database for simple CI if needed, or using SQLite for speed
+          # In a real scenario, use a Postgres action
+          python manage.py test
+        env:
+          SECRET_KEY: "ci-secret-key"
+          DEBUG: "True"
+          DB_ENGINE: "django.db.backends.sqlite3"
+
+  frontend-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: agrisight/frontend/package-lock.json
+          
+      - name: Install dependencies
+        run: |
+          cd agrisight/frontend
+          npm install
+          
+      - name: Lint and Format
+        run: |
+          cd agrisight/frontend
+          npm run lint || true # Don't fail the build yet, just report
+          
+      - name: Build Check
+        run: |
+          cd agrisight/frontend
+          npm run build
