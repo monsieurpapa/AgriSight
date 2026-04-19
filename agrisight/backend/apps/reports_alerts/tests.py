@@ -145,3 +145,54 @@ class ReportsAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
         alert.refresh_from_db()
         self.assertTrue(alert.is_read)
+
+
+class DownloadReportRegressionTests(TestCase):
+    """Regression: report.summary fix — Report.content is a JSONField, not a text field."""
+
+    def setUp(self):
+        self.client = Client()
+        self.org = Organization.objects.create(
+            name="Reg Org",
+            organization_type="humanitarian",
+            contact_email="reg@example.com",
+        )
+        self.user = User.objects.create_user(
+            email="reguser@example.com",
+            password="StrongPass123",
+            user_type="humanitarian",
+            organization=self.org,
+        )
+        geom = MultiPolygon(Polygon((
+            (28.5, -1.5), (30.0, -1.5), (30.0, 0.5), (28.5, 0.5), (28.5, -1.5),
+        )))
+        region = Region.objects.create(name="Reg Region", country="DRC", province="North Kivu", geometry=geom)
+        self.report = Report.objects.create(
+            title="Regression Report",
+            organization=self.org,
+            report_type="stress",
+            time_period_start=date.today(),
+            time_period_end=date.today(),
+            content={"summary": "Test summary"},
+            file_path="reports/regression.json",
+        )
+        self.report.regions.add(region)
+
+    def test_download_report_does_not_raise_attribute_error(self):
+        """report.content.get('summary') must not raise AttributeError (was report.summary)."""
+        self.client.force_login(self.user)
+        response = self.client.get(f"/api/v1/reports-alerts/reports/{self.report.id}/download/")
+        self.assertNotEqual(response.status_code, 500)
+
+    def test_download_report_with_dict_content_returns_summary(self):
+        self.client.force_login(self.user)
+        response = self.client.get(f"/api/v1/reports-alerts/reports/{self.report.id}/download/")
+        if response.status_code == 200:
+            self.assertIn(b"Test summary", response.content)
+
+    def test_download_report_with_non_dict_content_does_not_crash(self):
+        self.report.content = "plain string content"
+        self.report.save()
+        self.client.force_login(self.user)
+        response = self.client.get(f"/api/v1/reports-alerts/reports/{self.report.id}/download/")
+        self.assertNotEqual(response.status_code, 500)

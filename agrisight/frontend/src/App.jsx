@@ -22,6 +22,8 @@ const Analytics = lazy(() => import('./pages/Analytics'));
 const StressEvents = lazy(() => import('./pages/StressEvents'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const Reports = lazy(() => import('./pages/Reports'));
+const ReportGenerator = lazy(() => import('./pages/ReportGenerator'));
+const ReportFeedback = lazy(() => import('./pages/ReportFeedback'));
 const Exports = lazy(() => import('./pages/Exports'));
 const Organizations = lazy(() => import('./pages/Organizations'));
 const Users = lazy(() => import('./pages/Users'));
@@ -318,7 +320,21 @@ function App() {
                           <Settings />
                         </Suspense>
                       } />
+                      <Route path="/conflict-reports" element={
+                        <PermissionRoute permission="generate_reports">
+                          <Suspense fallback={<Fallback />}>
+                            <ReportGenerator />
+                          </Suspense>
+                        </PermissionRoute>
+                      } />
                     </Route>
+
+                    {/* Unauthenticated feedback route */}
+                    <Route path="/conflict-reports/feedback/:feedbackToken" element={
+                      <Suspense fallback={<Fallback />}>
+                        <ReportFeedback />
+                      </Suspense>
+                    } />
 
                     {/* Error routes */}
                     <Route path="/error/400" element={<ErrorPage status={400} />} />

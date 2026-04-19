@@ -218,7 +218,7 @@ def download_report(request, pk):
     Created: {report.created_at}
     Organization: {report.organization.name if report.organization else 'N/A'}
     
-    Summary: {report.summary or 'No summary available'}
+    Summary: {report.content.get('summary', 'No summary available') if isinstance(report.content, dict) else 'No summary available'}
     """
     
     response = HttpResponse(content, content_type='text/plain')

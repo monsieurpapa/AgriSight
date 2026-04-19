@@ -165,3 +165,15 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## Design System
+Always read `DESIGN.md` before making any visual or UI decisions.
+All font choices, colors, spacing, border-radius, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+In QA mode, flag any code that doesn't match `DESIGN.md`.
+
+Key rules to enforce automatically:
+- Never use `#8b5cf6`, `#7c3aed`, or `#8884d8` — replace with amber `#d29922` for conflict data
+- Never use Inter, Roboto, Arial, or Open Sans as primary font — use Plus Jakarta Sans / DM Sans / JetBrains Mono
+- All numeric data values (NDVI, event counts, IPC scores, timestamps) must use `font-family: var(--font-mono)`
+- IPC phase colors are semantic constants — never modify them for aesthetic reasons
