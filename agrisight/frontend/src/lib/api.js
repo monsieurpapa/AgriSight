@@ -369,6 +369,7 @@ export default {
   regionsAPI,
   alertsAPI,
   reportsAPI,
+  conflictReportsAPI,
   organizationsAPI,
   satelliteProcessingAPI,
   analyticsAPI,
