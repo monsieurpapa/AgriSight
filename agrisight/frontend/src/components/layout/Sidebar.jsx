@@ -15,7 +15,8 @@ import {
   Bell,
   Download,
   X,
-  KeyRound
+  KeyRound,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -103,6 +104,13 @@ const Sidebar = ({ isOpen, onClose }) => {
           href: '/reports',
           icon: FileText,
           description: 'Generate and view reports',
+          permission: 'generate_reports',
+        },
+        {
+          name: 'Conflict Reports',
+          href: '/conflict-reports',
+          icon: ShieldAlert,
+          description: 'IPC-aligned district risk PDF reports for DRC',
           permission: 'generate_reports',
         },
         {

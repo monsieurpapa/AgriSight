@@ -20,6 +20,7 @@ class Region(TimeStampedModel, SoftDeleteModel):
     area_hectares = models.FloatField(blank=True, null=True)
     country = models.CharField(max_length=100)
     province = models.CharField(max_length=100)
+    acled_name_aliases = models.JSONField(default=list, blank=True, help_text="ACLED district name variants for crosswalk")
     organizations = models.ManyToManyField(Organization, through='RegionAccess')
     
     history = HistoricalRecords()

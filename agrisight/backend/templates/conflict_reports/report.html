@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AgriSight Food Security Report — {{ report.start_date }} to {{ report.end_date }}</title>
+<style>
+  @page { size: A4; margin: 2cm; }
+  body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 10pt; color: #1a1a1a; }
+  h1 { font-size: 16pt; color: #1a5c2b; margin-bottom: 4px; }
+  h2 { font-size: 12pt; color: #1a5c2b; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 20px; }
+  .meta { color: #555; font-size: 9pt; margin-bottom: 16px; }
+  .warning-banner {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 9pt;
+  }
+  .warning-banner strong { color: #856404; }
+  .disclaimer {
+    background: #f0f4f8;
+    border-left: 4px solid #2563eb;
+    padding: 8px 12px;
+    font-size: 8.5pt;
+    color: #444;
+    margin-bottom: 20px;
+  }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9pt; }
+  th { background: #1a5c2b; color: #fff; padding: 6px 8px; text-align: left; }
+  td { padding: 5px 8px; border-bottom: 1px solid #e5e7eb; }
+  tr:nth-child(even) td { background: #f9fafb; }
+  .phase-1 { background: #d1fae5; font-weight: bold; }
+  .phase-2 { background: #fef9c3; font-weight: bold; }
+  .phase-3 { background: #fed7aa; font-weight: bold; color: #7c2d12; }
+  .phase-4 { background: #fecaca; font-weight: bold; color: #7f1d1d; }
+  .phase-5 { background: #dc2626; font-weight: bold; color: #fff; }
+  .data-unavailable { background: #e5e7eb; color: #6b7280; font-style: italic; }
+  .score-cell { font-weight: bold; text-align: center; }
+  .footer { margin-top: 30px; font-size: 8pt; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+  .feedback-link { font-size: 9pt; color: #2563eb; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<h1>AgriSight Food Security Report</h1>
+<div class="meta">
+  Period: <strong>{{ report.start_date }}</strong> to <strong>{{ report.end_date }}</strong>
+  &nbsp;|&nbsp; Generated: {{ report.updated_at|date:"Y-m-d H:i" }} UTC
+  &nbsp;|&nbsp; Report ID: {{ report.id }}
+</div>
+
+<div class="disclaimer">{{ disclaimer }}</div>
+
+{% if has_warnings %}
+<div class="warning-banner">
+  <strong>Data availability warnings:</strong>
+  <ul style="margin: 6px 0 0 0; padding-left: 16px;">
+    {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h2>District Risk Summary</h2>
+<table>
+  <thead>
+    <tr>
+      <th>District</th>
+      <th>Province</th>
+      <th>NDVI Anomaly</th>
+      <th>Conflict Events</th>
+      <th>IDPs (est.)</th>
+      <th>Rainfall Dev.</th>
+      <th>Composite Score</th>
+      <th>AgriSight Risk Phase</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for district, snap in snapshots %}
+    {% with phase=snap.ipc_phase_proxy %}
+    <tr>
+      <td>{{ district.name }}</td>
+      <td>{{ district.province }}</td>
+      <td>
+        {% if snap.ndvi_anomaly is not None %}
+          {{ snap.ndvi_anomaly|floatformat:1 }}%
+        {% else %}<span style="color:#9ca3af">N/A</span>{% endif %}
+      </td>
+      <td>
+        {% if snap.conflict_event_count is not None %}{{ snap.conflict_event_count }}
+        {% else %}<span style="color:#9ca3af">N/A</span>{% endif %}
+      </td>
+      <td>
+        {% if snap.idp_count is not None %}{{ snap.idp_count|floatformat:0 }}
+        {% else %}<span style="color:#9ca3af">N/A</span>{% endif %}
+      </td>
+      <td>
+        {% if snap.rainfall_deviation_pct is not None %}
+          {{ snap.rainfall_deviation_pct|floatformat:1 }}%
+        {% else %}<span style="color:#9ca3af">N/A</span>{% endif %}
+      </td>
+      <td class="score-cell
+        {% if snap.composite_score is not None %}
+          {% if snap.composite_score <= 20 %}phase-1
+          {% elif snap.composite_score <= 40 %}phase-2
+          {% elif snap.composite_score <= 60 %}phase-3
+          {% elif snap.composite_score <= 80 %}phase-4
+          {% else %}phase-5{% endif %}
+        {% else %}data-unavailable{% endif %}">
+        {% if snap.composite_score is not None %}{{ snap.composite_score|floatformat:1 }}
+        {% else %}N/A{% endif %}
+      </td>
+      <td class="
+        {% if phase == 'data_unavailable' %}data-unavailable
+        {% elif 'Phase 1' in phase %}phase-1
+        {% elif 'Phase 2' in phase %}phase-2
+        {% elif 'Phase 3' in phase %}phase-3
+        {% elif 'Phase 4' in phase %}phase-4
+        {% elif 'Phase 5' in phase %}phase-5
+        {% else %}{% endif %}">
+        {% if phase == 'data_unavailable' %}Insufficient data{% else %}{{ phase }}{% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% empty %}
+    <tr><td colspan="8" style="text-align:center;color:#9ca3af;">No district data available.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if snapshots %}
+<h2>Score Methodology</h2>
+<p style="font-size:9pt;">
+  Composite score = NDVI anomaly (30%) + conflict density (35%) + displacement flow (25%) + rainfall deviation (10%).
+  Each signal is normalised 0–100. Null signals are excluded and weights are redistributed proportionally.
+  Phase thresholds: 0–20 = Phase 1, 21–40 = Phase 2, 41–60 = Phase 3, 61–80 = Phase 4, 81–100 = Phase 5.
+</p>
+{% endif %}
+
+<div class="feedback-link">
+  Help us improve this report: <strong>{{ feedback_url }}</strong><br>
+  Rate accuracy, flag missing data, and tell us if you would use this report again. Takes 60 seconds.
+</div>
+
+<div class="footer">
+  AgriSight &mdash; Conflict-Aware Food Security Monitoring &mdash; Eastern DRC Pilot
+  &nbsp;|&nbsp; Data sources: ACLED, UNHCR, CHIRPS, Sentinel Hub (Copernicus)
+  &nbsp;|&nbsp; Not for redistribution without analyst review.
+</div>
+
+</body>
+</html>

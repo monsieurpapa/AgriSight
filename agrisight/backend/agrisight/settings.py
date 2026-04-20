@@ -66,6 +66,7 @@ LOCAL_APPS = [
     'apps.satellite_processing',
     'apps.ml_models',
     'apps.authentication',
+    'apps.conflict_reports',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -301,10 +302,15 @@ REST_USE_JWT = False  # Disable JWT, use session authentication
 REST_AUTH_TOKEN_MODEL = None  # Disable the default token model
 REST_SESSION_LOGIN = True  # Enable session-based login
 
-# Email Configuration (for development - use console backend)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'noreply@agrisight.com'
-EMAIL_HOST = config('EMAIL_HOST', default='localhost')
+# Email Configuration
+# Set EMAIL_HOST to use real SMTP; default console backend for development
+_EMAIL_HOST = config('EMAIL_HOST', default='')
+if _EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@agrisight.com')
+EMAIL_HOST = _EMAIL_HOST
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
@@ -318,11 +324,30 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'precompute-ndvi-baselines-weekly': {
+        'task': 'apps.conflict_reports.tasks.precompute_ndvi_baselines',
+        'schedule': crontab(hour=2, minute=0, day_of_week='sunday'),
+    },
+    'precompute-rainfall-baselines-monthly': {
+        'task': 'apps.conflict_reports.tasks.precompute_rainfall_baselines',
+        # First Sunday of each month at 03:00 — runs after NDVI baselines
+        'schedule': crontab(hour=3, minute=0, day_of_week='sunday', day_of_month='1-7'),
+    },
+}
+
 # Sentinel Hub Configuration
 SENTINEL_HUB_CLIENT_ID = config('SENTINEL_HUB_CLIENT_ID', default=None)
 SENTINEL_HUB_CLIENT_SECRET = config('SENTINEL_HUB_CLIENT_SECRET', default=None)
 SENTINEL_HUB_BASE_URL = config('SENTINEL_HUB_BASE_URL', default='https://sh.dataspace.copernicus.eu/api/v1')
 SENTINEL_HUB_OAUTH_URL = config('SENTINEL_HUB_OAUTH_URL', default='https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token')
+
+# Conflict Reports (Approach A) Configuration
+ACLED_API_KEY = config('ACLED_API_KEY', default='')
+ACLED_EMAIL = config('ACLED_EMAIL', default='')
+REPORT_ACCESS_TOKEN = config('REPORT_ACCESS_TOKEN', default='dev-token-change-in-prod')
+CONFLICT_REPORT_FRONTEND_URL = config('CONFLICT_REPORT_FRONTEND_URL', default='http://localhost:5173')
 
 # Cache configuration
 CACHES = {

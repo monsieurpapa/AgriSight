@@ -56,6 +56,27 @@ export const reportsAPI = {
   }
 };
 
+export const conflictReportsAPI = {
+  generate(payload) {
+    return post('/api/v1/conflict-reports/generate/', payload);
+  },
+  list() {
+    return get('/api/v1/conflict-reports/');
+  },
+  getStatus(id) {
+    return get(`/api/v1/conflict-reports/${id}/status/`);
+  },
+  getDetail(id) {
+    return get(`/api/v1/conflict-reports/${id}/`);
+  },
+  download(id) {
+    return download(`/api/v1/conflict-reports/${id}/download/`);
+  },
+  submitFeedback(feedbackToken, payload) {
+    return post(`/api/v1/conflict-reports/feedback/${feedbackToken}/`, payload);
+  },
+};
+
 export const organizationsAPI = {
   getOrganizations() {
     return get('/api/v1/organizations/');
@@ -348,6 +369,7 @@ export default {
   regionsAPI,
   alertsAPI,
   reportsAPI,
+  conflictReportsAPI,
   organizationsAPI,
   satelliteProcessingAPI,
   analyticsAPI,

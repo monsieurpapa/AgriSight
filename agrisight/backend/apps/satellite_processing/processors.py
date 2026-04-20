@@ -29,7 +29,8 @@ class SatelliteDataProcessor:
     
     def __init__(self):
         self.sentinel_client = None
-        self.temp_dir = '/tmp/agrisight_processing'
+        from django.conf import settings
+        self.temp_dir = os.path.join(str(settings.MEDIA_ROOT), 'satellite_processing_tmp')
         os.makedirs(self.temp_dir, exist_ok=True)
     
     def process_region_satellite_data(self, region_id: str, start_date: str, end_date: str) -> Dict[str, Any]:

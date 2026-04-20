@@ -46,6 +46,10 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - REDIS_URL=redis://redis:6379/1
+      - ACLED_API_KEY=${ACLED_API_KEY:-}
+      - ACLED_EMAIL=${ACLED_EMAIL:-}
+      - REPORT_ACCESS_TOKEN=${REPORT_ACCESS_TOKEN:-dev-token-change-in-prod}
+      - CONFLICT_REPORT_FRONTEND_URL=${CONFLICT_REPORT_FRONTEND_URL:-http://localhost:5173}
     volumes:
       - ./backend:/app
       - media_files:/app/media
@@ -60,6 +64,7 @@ services:
     command: >
       sh -c "python manage.py makemigrations --noinput &&
              python manage.py migrate --noinput &&
+             python manage.py load_ocha_boundaries --url https://data.humdata.org/dataset/cod-ab-cod/resource/drc_admbnda_adm2_ocha_itos_20190401.geojson || true &&
              python manage.py collectstatic --noinput &&
              gunicorn --bind 0.0.0.0:8000 --workers 3 agrisight.wsgi:application"
 

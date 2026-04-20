@@ -32,34 +32,48 @@ class SentinelHubClient:
     
     def _get_access_token(self) -> str:
         """
-        Get OAuth access token for Sentinel Hub API
+        Get OAuth access token via sentinelhub SDK session (handles refresh automatically).
         """
         if self.access_token and self.token_expires_at and datetime.now() < self.token_expires_at:
             return self.access_token
-        
+
         if not self.client_id or not self.client_secret:
             raise ValueError("Sentinel Hub credentials not configured")
-        
-        data = {
-            'grant_type': 'client_credentials',
-            'client_id': self.client_id,
-            'client_secret': self.client_secret
-        }
-        
+
         try:
-            response = requests.post(self.oauth_url, data=data)
-            response.raise_for_status()
-            
-            token_data = response.json()
-            self.access_token = token_data['access_token']
-            expires_in = token_data.get('expires_in', 3600)
-            self.token_expires_at = datetime.now() + timedelta(seconds=expires_in - 60)  # Refresh 1 minute early
-            
-            logger.info("Successfully obtained Sentinel Hub access token")
+            from sentinelhub import SHConfig, SentinelHubSession
+            config = SHConfig(
+                sh_client_id=self.client_id,
+                sh_client_secret=self.client_secret,
+            )
+            session = SentinelHubSession(config=config)
+            token_data = session.token
+            self.access_token = token_data["access_token"]
+            expires_in = token_data.get("expires_in", 3600)
+            self.token_expires_at = datetime.now() + timedelta(seconds=expires_in - 60)
+            logger.info("Obtained Sentinel Hub access token via SDK session")
             return self.access_token
-            
+        except ImportError:
+            # sentinelhub SDK not available — fall back to direct OAuth
+            pass
+        except Exception as e:
+            logger.error("sentinelhub SDK auth failed: %s — retrying with direct OAuth", e)
+
+        # Direct OAuth fallback
+        try:
+            response = requests.post(self.oauth_url, data={
+                "grant_type": "client_credentials",
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            })
+            response.raise_for_status()
+            token_data = response.json()
+            self.access_token = token_data["access_token"]
+            expires_in = token_data.get("expires_in", 3600)
+            self.token_expires_at = datetime.now() + timedelta(seconds=expires_in - 60)
+            return self.access_token
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to obtain Sentinel Hub access token: {e}")
+            logger.error("Failed to obtain Sentinel Hub access token: %s", e)
             raise
     
     def _make_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
@@ -72,9 +86,10 @@ class SentinelHubClient:
         kwargs['headers'] = headers
         
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
-        
+        timeout = kwargs.pop('timeout', 20)
+
         try:
-            response = requests.request(method, url, **kwargs)
+            response = requests.request(method, url, timeout=timeout, **kwargs)
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
@@ -295,8 +310,50 @@ class SentinelHubClient:
             **kwargs
         )
     
-    def get_true_color_image(self, 
-                           bbox: List[float], 
+    def statistical_request(self,
+                           bbox: List[float],
+                           time_range: Tuple[str, str],
+                           evalscript: str,
+                           aggregation_interval: str = "P1D",
+                           timeout: int = 20) -> dict:
+        """
+        Make a Statistical API request to get aggregated stats over a bbox/time range.
+
+        Returns parsed JSON with mean NDVI per time bucket.
+        """
+        request_data = {
+            "input": {
+                "bounds": {
+                    "bbox": bbox,
+                    "properties": {"crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"},
+                },
+                "data": [{
+                    "dataFilter": {
+                        "timeRange": {"from": time_range[0], "to": time_range[1]},
+                        "maxCloudCoverage": 30,
+                    },
+                    "type": "sentinel-2-l2a",
+                }],
+            },
+            "aggregation": {
+                "timeRange": {"from": time_range[0], "to": time_range[1]},
+                "aggregationInterval": {"of": aggregation_interval},
+                "evalscript": evalscript,
+                "resx": 0.0001,
+                "resy": 0.0001,
+            },
+        }
+        response = self._make_request(
+            "POST",
+            "statistics",
+            json=request_data,
+            headers={"Content-Type": "application/json"},
+            timeout=timeout,
+        )
+        return response.json()
+
+    def get_true_color_image(self,
+                           bbox: List[float],
                            time_range: Tuple[str, str],
                            **kwargs) -> requests.Response:
         """

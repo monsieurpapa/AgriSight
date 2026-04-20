@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/v1/api-keys/', include('apps.api_keys_logs.urls')),
     path('api/v1/satellite-processing/', include('apps.satellite_processing.urls')),
     path('api/v1/ml-models/', include('apps.ml_models.urls')),
+    path('api/v1/conflict-reports/', include('apps.conflict_reports.urls')),
     path('api/satellite-processing/', include(('apps.satellite_processing.urls', 'satellite_processing'), namespace='satellite_processing_unversioned')),
     
     # API documentation
