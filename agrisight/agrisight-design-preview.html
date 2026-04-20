@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgriSight — Design System Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,300;1,9..144,400&family=DM+Sans:wght@300;400;500&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#0D0F0E;--surface:#161A17;--surface-high:#1E2520;--grid:#2A2E2B;
+      --text:#E8E4DA;--muted:#8A8C7F;--faint:#505550;
+      --accent:#4A7C59;--accent-dim:#2C4D38;
+      --warn:#C97B38;--warn-dim:#6B3E15;
+      --crit:#B84436;--crit-dim:#5C1F18;
+      --ok:#5A8A6A;--ok-dim:#243D2C;
+      --f-display:'Fraunces',Georgia,serif;
+      --f-body:'DM Sans',system-ui,sans-serif;
+      --f-mono:'Geist Mono','JetBrains Mono',monospace;
+      --r-sm:3px;--r-md:5px;--r-lg:8px;
+    }
+    [data-theme="light"]{--bg:#F2EDE3;--surface:#EAE3D5;--surface-high:#E0D8C8;--grid:#C2B9AB;--text:#1C1F1D;--muted:#6B6860;--faint:#A09890;--accent:#2C5E3A;--accent-dim:#C8DDCC;--warn:#8F4E12;--warn-dim:#F5DFC3;--crit:#7A2219;--crit-dim:#F0C8C4;--ok:#2C5E3A;--ok-dim:#C8E0CC;}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:var(--f-body);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+    .page{max-width:1280px;margin:0 auto;padding:48px 32px;}
+    .section{margin-bottom:72px;}
+    .section-label{font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:24px;display:flex;align-items:center;gap:12px;}
+    .section-label::after{content:'';flex:1;height:1px;background:var(--grid);}
+    .masthead{border-bottom:1px solid var(--grid);padding-bottom:48px;margin-bottom:72px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:24px;}
+    .wordmark{font-family:var(--f-display);font-size:42px;font-weight:300;letter-spacing:-.02em;color:var(--text);line-height:1;}
+    .wordmark span{color:var(--accent);font-weight:600;}
+    .tagline{font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;color:var(--muted);margin-top:8px;text-transform:uppercase;}
+    .theme-toggle{background:var(--surface);border:1px solid var(--grid);color:var(--muted);font-family:var(--f-mono);font-size:11px;padding:6px 14px;border-radius:var(--r-sm);cursor:pointer;}
+    .thesis-block{background:var(--surface);border:1px solid var(--grid);border-left:3px solid var(--accent);border-radius:var(--r-md);padding:24px 28px;margin-bottom:16px;}
+    .thesis-text{font-family:var(--f-display);font-size:20px;font-weight:400;font-style:italic;line-height:1.5;color:var(--text);}
+    .lead{color:var(--muted);font-size:13px;max-width:640px;margin-bottom:32px;line-height:1.7;}
+
+    /* Mockup */
+    .mockup-shell{background:var(--bg);border:1px solid var(--grid);border-radius:var(--r-lg);overflow:hidden;}
+    .mock-topbar{background:var(--surface);border-bottom:1px solid var(--grid);padding:0 16px;height:44px;display:flex;align-items:center;gap:16px;}
+    .mock-brand{font-family:var(--f-display);font-size:16px;font-weight:600;color:var(--text);}
+    .mock-brand span{color:var(--accent);}
+    .mock-crumb{font-family:var(--f-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;}
+    .mock-actions{margin-left:auto;display:flex;gap:8px;align-items:center;}
+    .mock-date{font-family:var(--f-mono);font-size:10px;color:var(--faint);letter-spacing:.06em;}
+    .mock-body{display:grid;grid-template-columns:200px 1fr 240px;height:500px;}
+    .mock-sidebar{background:var(--surface);border-right:1px solid var(--grid);padding:16px 0;overflow:hidden;}
+    .mock-sidebar-section{padding:0 12px;margin-bottom:16px;}
+    .mock-sidebar-lbl{font-family:var(--f-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:0 4px;margin-bottom:6px;}
+    .mock-region{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:var(--r-sm);}
+    .mock-region.active,.mock-district.active{background:var(--surface-high);}
+    .mock-region-name{font-family:var(--f-body);font-size:12px;color:var(--text);}
+    .mock-district{display:flex;align-items:center;justify-content:space-between;padding:5px 8px 5px 18px;border-radius:var(--r-sm);}
+    .mock-district-name{font-family:var(--f-body);font-size:11px;color:var(--muted);}
+    .mock-district.active .mock-district-name{color:var(--text);}
+    .mock-map{background:#0A1A10;position:relative;overflow:hidden;}
+    .map-label{position:absolute;top:12px;left:12px;font-family:var(--f-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
+    .map-dist{position:absolute;border-radius:2px;display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:var(--f-mono);font-size:9px;color:rgba(232,228,218,.7);letter-spacing:.04em;text-transform:uppercase;}
+    .d-goma{width:80px;height:60px;background:rgba(184,68,54,.35);border:1px solid rgba(184,68,54,.6);top:140px;left:100px;}
+    .d-beni{width:70px;height:55px;background:rgba(201,123,56,.3);border:1px solid rgba(201,123,56,.55);top:80px;left:160px;}
+    .d-butembo{width:65px;height:50px;background:rgba(201,123,56,.25);border:1px solid rgba(201,123,56,.45);top:30px;left:90px;}
+    .d-uvira{width:75px;height:55px;background:rgba(74,124,89,.3);border:1px solid rgba(74,124,89,.5);top:210px;left:200px;}
+    .d-minembwe{width:60px;height:45px;background:rgba(201,123,56,.2);border:1px solid rgba(201,123,56,.4);top:180px;left:270px;}
+    .map-legend{position:absolute;bottom:12px;left:12px;display:flex;flex-direction:column;gap:4px;}
+    .legend-row{display:flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:9px;color:var(--muted);}
+    .legend-sw{width:10px;height:10px;border-radius:1px;}
+    .map-scale{position:absolute;bottom:12px;right:12px;font-family:var(--f-mono);font-size:9px;color:var(--faint);}
+    .mock-analytics{background:var(--surface);border-left:1px solid var(--grid);padding:14px;display:flex;flex-direction:column;gap:12px;overflow:hidden;}
+    .panel-title{font-family:var(--f-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:6px;}
+    .chart-area{background:var(--bg);border:1px solid var(--grid);border-radius:var(--r-sm);height:80px;padding:8px;position:relative;overflow:hidden;}
+    .chart-area svg{width:100%;height:100%;overflow:visible;}
+    .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .stat{background:var(--bg);border:1px solid var(--grid);border-radius:var(--r-sm);padding:8px 10px;}
+    .stat-lbl{font-family:var(--f-mono);font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;}
+    .stat-val{font-family:var(--f-mono);font-size:16px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--text);margin-top:2px;}
+    .stat-val.warn{color:var(--warn);}.stat-val.crit{color:var(--crit);}
+    .mock-feed{border-top:1px solid var(--grid);background:var(--surface);padding:10px 14px;display:flex;gap:8px;overflow:hidden;}
+    .feed-chip{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--grid);border-radius:var(--r-sm);padding:6px 10px;white-space:nowrap;}
+    .chip-dot{width:5px;height:5px;border-radius:50%;background:var(--warn);flex-shrink:0;}
+    .chip-dot.crit{background:var(--crit);}
+    .chip-text{font-family:var(--f-body);font-size:11px;color:var(--text);}
+    .chip-badge{font-family:var(--f-mono);font-size:9px;color:var(--warn);padding:1px 5px;background:var(--warn-dim);border-radius:2px;}
+    .chip-badge.crit{color:var(--crit);background:var(--crit-dim);}
+
+    /* Type */
+    .type-row{display:grid;grid-template-columns:160px 1fr;gap:24px;align-items:start;padding:24px 0;border-bottom:1px solid var(--grid);}
+    .type-row:last-child{border-bottom:none;}
+    .type-meta{font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;padding-top:4px;}
+    .type-meta strong{display:block;color:var(--text);font-size:12px;margin-bottom:4px;}
+    .spec-display{font-family:var(--f-display);font-size:48px;font-weight:600;letter-spacing:-.02em;color:var(--text);line-height:1.1;}
+    .spec-display-sm{font-family:var(--f-display);font-size:24px;font-weight:400;font-style:italic;color:var(--text);margin-top:6px;line-height:1.3;}
+    .spec-body{font-family:var(--f-body);font-size:14px;color:var(--muted);line-height:1.7;max-width:560px;}
+    .mono-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;max-width:480px;}
+    .mono-cell{background:var(--surface);padding:6px 10px;font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums;text-align:right;border:1px solid var(--grid);}
+    .mono-cell.hd{color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;}
+    .mono-cell.warn{color:var(--warn);}.mono-cell.crit{color:var(--crit);}.mono-cell.ok{color:var(--ok);}
+
+    /* Palette */
+    .palette-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px;margin-bottom:28px;}
+    .swatch{border-radius:var(--r-md);overflow:hidden;border:1px solid var(--grid);}
+    .swatch-color{height:64px;}
+    .swatch-info{background:var(--surface);padding:10px 12px;}
+    .swatch-name{font-family:var(--f-mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+    .swatch-hex{font-family:var(--f-mono);font-size:12px;color:var(--text);margin-top:2px;}
+    .swatch-role{font-family:var(--f-body);font-size:11px;color:var(--faint);margin-top:4px;}
+
+    /* Components */
+    .component-strip{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:24px;align-items:center;}
+    .btn{font-family:var(--f-body);font-size:12px;font-weight:500;letter-spacing:.04em;padding:8px 18px;border-radius:var(--r-sm);border:1px solid transparent;cursor:pointer;}
+    .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+    .btn-secondary{background:transparent;color:var(--text);border-color:var(--grid);}
+    .btn-ghost{background:transparent;color:var(--muted);border-color:transparent;}
+    .btn-warn{background:var(--warn-dim);color:var(--warn);border-color:var(--warn);}
+    .btn-crit{background:var(--crit-dim);color:var(--crit);border-color:var(--crit);}
+    .badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--f-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:2px;}
+    .badge-dot{width:5px;height:5px;border-radius:50%;}
+    .badge-p2{background:var(--ok-dim);color:var(--ok);}
+    .badge-p3{background:var(--warn-dim);color:var(--warn);}
+    .badge-p4{background:#6B2E10;color:#E07A38;}
+    .badge-p5{background:var(--crit-dim);color:var(--crit);}
+    .dot-p2{background:var(--ok);}.dot-p3{background:var(--warn);}.dot-p4{background:#E07A38;}.dot-p5{background:var(--crit);}
+
+    /* Stat cards */
+    .card{background:var(--surface);border:1px solid var(--grid);border-radius:var(--r-lg);padding:20px 24px;}
+    .card-title{font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+    .card-value{font-family:var(--f-display);font-size:36px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;line-height:1;}
+    .card-delta{font-family:var(--f-mono);font-size:11px;color:var(--warn);margin-top:4px;}
+    .cards-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
+
+    /* Alert items */
+    .alert-item{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;background:var(--surface);border:1px solid var(--grid);border-left:3px solid var(--warn);border-radius:var(--r-md);margin-bottom:8px;}
+    .alert-item.crit{border-left-color:var(--crit);}
+    .alert-item.ok{border-left-color:var(--ok);}
+    .alert-time{font-family:var(--f-mono);font-size:10px;color:var(--faint);min-width:48px;padding-top:2px;}
+    .alert-body{flex:1;}
+    .alert-title{font-family:var(--f-body);font-size:13px;font-weight:500;color:var(--text);}
+    .alert-meta{font-family:var(--f-mono);font-size:10px;color:var(--muted);margin-top:3px;}
+
+    /* Departures */
+    .depart-cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+    .depart-card{background:var(--surface);border:1px solid var(--grid);border-radius:var(--r-lg);padding:24px;}
+    .depart-n{font-family:var(--f-display);font-size:64px;font-weight:700;color:var(--accent);opacity:.18;line-height:1;margin-bottom:8px;}
+    .depart-title{font-family:var(--f-display);font-size:18px;font-weight:600;color:var(--text);margin-bottom:8px;}
+    .depart-body{font-family:var(--f-body);font-size:13px;color:var(--muted);line-height:1.65;}
+
+    @media(max-width:860px){.mock-body{grid-template-columns:1fr;height:auto;}.mock-sidebar,.mock-analytics{display:none;}.depart-cards{grid-template-columns:1fr;}.type-row{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="masthead">
+    <div>
+      <div class="wordmark">Agri<span>Sight</span></div>
+      <div class="tagline">Design System · Industrial-Cartographic Direction · April 2026</div>
+    </div>
+    <button class="theme-toggle" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='light'?'':'light';this.textContent=document.documentElement.dataset.theme==='light'?'◐ dark':'◑ light'">◑ light</button>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Visual Thesis</div>
+    <div class="thesis-block">
+      <div class="thesis-text">"A military operations room that grew up — precise, warm-dark, built for people who read data under pressure and need the interface to carry the weight of that responsibility without aesthetic panic."</div>
+    </div>
+    <p class="lead">AgriSight is not a productivity dashboard. It is an early-warning instrument. It should feel like the Bloomberg Terminal if it were designed by a cartographer: information-dense, authoritative, and deeply respectful of the analyst's cognitive load.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Product Mockup — District Risk View</div>
+    <div class="mockup-shell">
+      <div class="mock-topbar">
+        <div class="mock-brand">Agri<span>Sight</span></div>
+        <div class="mock-crumb">DRC / NORD-KIVU / GOMA</div>
+        <div class="mock-actions">
+          <div class="mock-date">APR 2026 · IPC CYCLE 3</div>
+          <span class="badge badge-p5"><span class="badge-dot dot-p5"></span>Phase 5 · Goma</span>
+          <button class="btn btn-secondary" style="padding:5px 12px;font-size:11px;">Export PDF</button>
+        </div>
+      </div>
+      <div class="mock-body">
+        <div class="mock-sidebar">
+          <div class="mock-sidebar-section">
+            <div class="mock-sidebar-lbl">Provinces</div>
+            <div class="mock-region active"><span class="mock-region-name">Nord-Kivu</span><span class="badge badge-p5" style="font-size:9px;padding:2px 5px;"><span class="badge-dot dot-p5"></span>P5</span></div>
+            <div class="mock-district active"><span class="mock-district-name">Goma</span><span class="badge badge-p5" style="font-size:9px;padding:1px 4px;">P5</span></div>
+            <div class="mock-district"><span class="mock-district-name">Beni</span><span class="badge badge-p4" style="font-size:9px;padding:1px 4px;">P4</span></div>
+            <div class="mock-district"><span class="mock-district-name">Butembo</span><span class="badge badge-p3" style="font-size:9px;padding:1px 4px;">P3</span></div>
+            <div class="mock-district"><span class="mock-district-name">Walikale</span><span class="badge badge-p3" style="font-size:9px;padding:1px 4px;">P3</span></div>
+          </div>
+          <div class="mock-sidebar-section">
+            <div class="mock-sidebar-lbl">Sud-Kivu</div>
+            <div class="mock-region"><span class="mock-region-name">Sud-Kivu</span><span class="badge badge-p3" style="font-size:9px;padding:2px 5px;"><span class="badge-dot dot-p3"></span>P3</span></div>
+            <div class="mock-district"><span class="mock-district-name">Uvira</span><span class="badge badge-p2" style="font-size:9px;padding:1px 4px;">P2</span></div>
+            <div class="mock-district"><span class="mock-district-name">Minembwe</span><span class="badge badge-p3" style="font-size:9px;padding:1px 4px;">P3</span></div>
+            <div class="mock-district"><span class="mock-district-name">Mwenga</span><span class="badge badge-p2" style="font-size:9px;padding:1px 4px;">P2</span></div>
+          </div>
+          <div class="mock-sidebar-section">
+            <div class="mock-sidebar-lbl">Ituri</div>
+            <div class="mock-region"><span class="mock-region-name">Ituri</span><span class="badge badge-p4" style="font-size:9px;padding:2px 5px;"><span class="badge-dot dot-p4"></span>P4</span></div>
+            <div class="mock-district"><span class="mock-district-name">Bunia</span><span class="badge badge-p4" style="font-size:9px;padding:1px 4px;">P4</span></div>
+            <div class="mock-district"><span class="mock-district-name">Irumu</span><span class="badge badge-p3" style="font-size:9px;padding:1px 4px;">P3</span></div>
+          </div>
+        </div>
+        <div class="mock-map">
+          <div class="map-label">SENTINEL-2 · NDVI COMPOSITE · 2026-04-15</div>
+          <div class="map-dist d-goma"><span>Goma</span><span class="badge badge-p5" style="font-size:8px;margin-top:3px;">P5</span></div>
+          <div class="map-dist d-beni"><span>Beni</span><span class="badge badge-p4" style="font-size:8px;margin-top:3px;">P4</span></div>
+          <div class="map-dist d-butembo"><span>Butembo</span><span class="badge badge-p3" style="font-size:8px;margin-top:3px;">P3</span></div>
+          <div class="map-dist d-uvira"><span>Uvira</span><span class="badge badge-p2" style="font-size:8px;margin-top:3px;">P2</span></div>
+          <div class="map-dist d-minembwe"><span>Minembwe</span><span class="badge badge-p3" style="font-size:8px;margin-top:3px;">P3</span></div>
+          <div class="map-legend">
+            <div class="legend-row"><div class="legend-sw" style="background:rgba(184,68,54,.5);border:1px solid rgba(184,68,54,.7);"></div>IPC Phase 5 · Famine</div>
+            <div class="legend-row"><div class="legend-sw" style="background:rgba(201,123,56,.4);border:1px solid rgba(201,123,56,.6);"></div>Phase 4 · Emergency</div>
+            <div class="legend-row"><div class="legend-sw" style="background:rgba(201,123,56,.2);border:1px solid rgba(201,123,56,.4);"></div>Phase 3 · Crisis</div>
+            <div class="legend-row"><div class="legend-sw" style="background:rgba(74,124,89,.3);border:1px solid rgba(74,124,89,.5);"></div>Phase 2 · Stressed</div>
+          </div>
+          <div class="map-scale">50 km ────</div>
+        </div>
+        <div class="mock-analytics">
+          <div>
+            <div class="panel-title">NDVI Index · Goma · 12m</div>
+            <div class="chart-area">
+              <svg viewBox="0 0 200 60" preserveAspectRatio="none">
+                <line x1="0" y1="30" x2="200" y2="30" stroke="#2A2E2B" stroke-width="1" stroke-dasharray="3,3"/>
+                <path d="M0,20 20,18 40,22 60,24 80,28 100,38 120,50 140,52 160,48 180,44 200,46 L200,60 L0,60 Z" fill="rgba(74,124,89,.12)"/>
+                <polyline points="0,20 20,18 40,22 60,24 80,28 100,38 120,50 140,52 160,48 180,44 200,46" fill="none" stroke="#4A7C59" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="120" cy="50" r="3" fill="rgba(184,68,54,.8)"/>
+              </svg>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat"><div class="stat-lbl">NDVI Now</div><div class="stat-val warn">0.31</div></div>
+            <div class="stat"><div class="stat-lbl">vs. Base</div><div class="stat-val crit">−28%</div></div>
+          </div>
+          <div>
+            <div class="panel-title">Conflict Events · 30d</div>
+            <div class="chart-area">
+              <svg viewBox="0 0 200 50" preserveAspectRatio="none">
+                <path d="M0,45 20,40 40,35 60,30 80,22 100,18 120,14 140,16 160,12 180,10 200,8 L200,50 L0,50 Z" fill="rgba(184,68,54,.1)"/>
+                <polyline points="0,45 20,40 40,35 60,30 80,22 100,18 120,14 140,16 160,12 180,10 200,8" fill="none" stroke="#B84436" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat"><div class="stat-lbl">Incidents</div><div class="stat-val crit">147</div></div>
+            <div class="stat"><div class="stat-lbl">IDPs</div><div class="stat-val warn">84k</div></div>
+          </div>
+          <div>
+            <div class="panel-title">CHIRPS Rainfall Deficit</div>
+            <div class="chart-area" style="height:60px;">
+              <svg viewBox="0 0 200 40" preserveAspectRatio="none">
+                <line x1="0" y1="20" x2="200" y2="20" stroke="#2A2E2B" stroke-width="1" stroke-dasharray="3,3"/>
+                <polyline points="0,22 25,18 50,14 75,20 100,30 125,36 150,38 175,36 200,34" fill="none" stroke="#8A8C7F" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mock-feed">
+        <div class="feed-chip" style="border-color:var(--crit)"><div class="chip-dot crit"></div><span class="chip-text">Goma — NDVI −28% below seasonal baseline</span><span class="chip-badge crit">IPC P5</span></div>
+        <div class="feed-chip"><div class="chip-dot"></div><span class="chip-text">Beni — 147 conflict events (+38%)</span><span class="chip-badge">IPC P4</span></div>
+        <div class="feed-chip"><div class="chip-dot"></div><span class="chip-text">Minembwe — 12,400 new IDPs</span><span class="chip-badge">IPC P3</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Typography</div>
+    <div class="type-row">
+      <div class="type-meta"><strong>Fraunces</strong>Display / Headers<br>Variable: opsz 9–144<br>Weights: 300, 600, 700</div>
+      <div>
+        <div class="spec-display">District Risk<br>Report</div>
+        <div class="spec-display-sm">North Kivu, April 2026 — IPC Projection</div>
+      </div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><strong>DM Sans</strong>Body / UI Labels<br>Weights: 300, 400, 500</div>
+      <div class="spec-body">Satellite imagery acquired on 15 April 2026 indicates vegetation stress across 6 of 11 monitored districts in Nord-Kivu. NDVI values in Goma territory have declined 28% below the 2015–2024 seasonal mean, correlated with a 38% increase in ACLED-recorded conflict events and a CHIRPS-identified rainfall deficit of 42mm below normal for the current dekad.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><strong>Geist Mono</strong>Data / Tables<br>Tabular numerals<br>Weights: 300, 400, 500</div>
+      <div>
+        <div class="mono-grid">
+          <div class="mono-cell hd">District</div><div class="mono-cell hd">NDVI</div><div class="mono-cell hd">Δ Base</div><div class="mono-cell hd">IPC</div>
+          <div class="mono-cell">Goma</div><div class="mono-cell warn">0.31</div><div class="mono-cell crit">−28%</div><div class="mono-cell crit">P5</div>
+          <div class="mono-cell">Beni</div><div class="mono-cell warn">0.38</div><div class="mono-cell warn">−19%</div><div class="mono-cell warn">P4</div>
+          <div class="mono-cell">Uvira</div><div class="mono-cell ok">0.54</div><div class="mono-cell ok">+3%</div><div class="mono-cell ok">P2</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Color System</div>
+    <div class="palette-grid">
+      <div class="swatch"><div class="swatch-color" style="background:#0D0F0E;"></div><div class="swatch-info"><div class="swatch-name">Background</div><div class="swatch-hex">#0D0F0E</div><div class="swatch-role">App canvas</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#161A17;"></div><div class="swatch-info"><div class="swatch-name">Surface</div><div class="swatch-hex">#161A17</div><div class="swatch-role">Cards, panels</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#1E2520;border:1px solid #2A2E2B;"></div><div class="swatch-info"><div class="swatch-name">Surface High</div><div class="swatch-hex">#1E2520</div><div class="swatch-role">Active / hover</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#E8E4DA;"></div><div class="swatch-info"><div class="swatch-name">Text Primary</div><div class="swatch-hex">#E8E4DA</div><div class="swatch-role">Warm parchment</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#8A8C7F;"></div><div class="swatch-info"><div class="swatch-name">Text Muted</div><div class="swatch-hex">#8A8C7F</div><div class="swatch-role">Labels, metadata</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#4A7C59;"></div><div class="swatch-info"><div class="swatch-name">Accent — NDVI</div><div class="swatch-hex">#4A7C59</div><div class="swatch-role">Primary / healthy</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#C97B38;"></div><div class="swatch-info"><div class="swatch-name">Alert — IPC P3/4</div><div class="swatch-hex">#C97B38</div><div class="swatch-role">Crisis / warning</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#B84436;"></div><div class="swatch-info"><div class="swatch-name">Critical — IPC P5</div><div class="swatch-hex">#B84436</div><div class="swatch-role">Famine / emergency</div></div></div>
+    </div>
+    <div class="component-strip">
+      <span class="badge badge-p2"><span class="badge-dot dot-p2"></span>Phase 2 · Stressed</span>
+      <span class="badge badge-p3"><span class="badge-dot dot-p3"></span>Phase 3 · Crisis</span>
+      <span class="badge badge-p4"><span class="badge-dot dot-p4"></span>Phase 4 · Emergency</span>
+      <span class="badge badge-p5"><span class="badge-dot dot-p5"></span>Phase 5 · Famine</span>
+    </div>
+    <div class="component-strip">
+      <button class="btn btn-primary">Export Report</button>
+      <button class="btn btn-secondary">Filter Districts</button>
+      <button class="btn btn-ghost">View Archive</button>
+      <button class="btn btn-warn">Alert Threshold</button>
+      <button class="btn btn-crit">Emergency Brief</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Stat Cards</div>
+    <div class="cards-row">
+      <div class="card"><div class="card-title">Districts at IPC P4+</div><div class="card-value" style="color:var(--crit);">4</div><div class="card-delta">↑ 2 from last cycle</div></div>
+      <div class="card"><div class="card-title">Mean NDVI · NK</div><div class="card-value" style="color:var(--warn);">0.34</div><div class="card-delta">↓ 0.11 vs. baseline</div></div>
+      <div class="card"><div class="card-title">IDPs Monitored</div><div class="card-value">186k</div><div class="card-delta" style="color:var(--ok);">↔ stable</div></div>
+      <div class="card"><div class="card-title">Active Alerts</div><div class="card-value" style="color:var(--crit);">12</div><div class="card-delta">3 critical</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Alert Feed</div>
+    <div class="alert-item crit">
+      <div class="alert-time">08:14</div>
+      <div class="alert-body">
+        <div class="alert-title">Goma territory — NDVI 0.31, −28% vs. seasonal mean. IPC Phase 5 classification threshold breached.</div>
+        <div class="alert-meta">SOURCE: Sentinel-2 · NDVI computed 2026-04-15 · ACLED conflict correlated · Auto-generated</div>
+      </div>
+      <span class="badge badge-p5"><span class="badge-dot dot-p5"></span>P5</span>
+    </div>
+    <div class="alert-item">
+      <div class="alert-time">06:52</div>
+      <div class="alert-body">
+        <div class="alert-title">Beni — 147 conflict events in 30-day window. Displacement cohort update: +12,400 IDPs.</div>
+        <div class="alert-meta">SOURCE: ACLED · UNHCR DTM · Composite risk model v3.2</div>
+      </div>
+      <span class="badge badge-p4"><span class="badge-dot dot-p4"></span>P4</span>
+    </div>
+    <div class="alert-item ok">
+      <div class="alert-time">03:30</div>
+      <div class="alert-body">
+        <div class="alert-title">Uvira — NDVI recovery to 0.54. Rainfall deficit resolved. Reclassification to Phase 2 pending analyst review.</div>
+        <div class="alert-meta">SOURCE: Sentinel-2 · CHIRPS dekad 3 · Analyst review required before publish</div>
+      </div>
+      <span class="badge badge-p2"><span class="badge-dot dot-p2"></span>P2</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Two Deliberate Departures</div>
+    <div class="depart-cards">
+      <div class="depart-card">
+        <div class="depart-n">01</div>
+        <div class="depart-title">Warm dark, not cold dark</div>
+        <div class="depart-body">Every other serious data tool goes cold dark — navy, slate, zinc, cool grays. It signals "enterprise" but also signals emotional distance. AgriSight's background is #0D0F0E, near-black with a green undertone drawn from healthy NDVI. The text is #E8E4DA, parchment not pure white. The whole surface reads like a surveyor's field map lit by a desk lamp at 2am. Warm, which is unusual in this category. Also exactly right: this is a product where the data represents human suffering. Cold distance is the wrong emotional register for analysts who are trying to care enough to act.</div>
+      </div>
+      <div class="depart-card">
+        <div class="depart-n">02</div>
+        <div class="depart-title">A serif in the dashboard</div>
+        <div class="depart-body">No NGO data dashboard uses a display serif. They all default to grotesques because "serifs are editorial, not functional." That assumption is wrong, and Fraunces proves it. Fraunces is a variable-axis serif that goes from delicate optical cuts at small sizes to authoritative heavy display weights. Using it for district names, report headers, and stat values gives AgriSight an aesthetic register that says "precision instrument" rather than "SaaS product." DM Sans does the functional UI work. Geist Mono handles the data layer. Fraunces carries the identity. This combination doesn't exist anywhere else in humanitarian tech, which is exactly why it should.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">First 3 Seconds</div>
+    <div class="thesis-block" style="border-left-color:var(--warn);">
+      <div class="thesis-text" style="font-style:normal;font-size:17px;font-weight:400;line-height:1.7;">
+        The analyst opens the app and thinks: <em style="font-style:italic;color:var(--muted);">"This was built for me."</em>
+        <br><br>
+        Not "this is impressive." Not "this is clean." The reaction is recognition. The density is right. The color coding maps directly to the IPC scale they have memorized. The font is authoritative without being cold. Nothing is trying to charm them. The interface treats them as the expert they are.
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
