@@ -15,12 +15,13 @@
       --warn:#C97B38;--warn-dim:#6B3E15;
       --crit:#B84436;--crit-dim:#5C1F18;
       --ok:#5A8A6A;--ok-dim:#243D2C;
+      --catastrophe:#9B6B95;--catastrophe-dim:#3D2438;
       --f-display:'Fraunces',Georgia,serif;
       --f-body:'DM Sans',system-ui,sans-serif;
       --f-mono:'Geist Mono','JetBrains Mono',monospace;
       --r-sm:3px;--r-md:5px;--r-lg:8px;
     }
-    [data-theme="light"]{--bg:#F2EDE3;--surface:#EAE3D5;--surface-high:#E0D8C8;--grid:#C2B9AB;--text:#1C1F1D;--muted:#6B6860;--faint:#A09890;--accent:#2C5E3A;--accent-dim:#C8DDCC;--warn:#8F4E12;--warn-dim:#F5DFC3;--crit:#7A2219;--crit-dim:#F0C8C4;--ok:#2C5E3A;--ok-dim:#C8E0CC;}
+    [data-theme="light"]{--bg:#F2EDE3;--surface:#EAE3D5;--surface-high:#E0D8C8;--grid:#C2B9AB;--text:#1C1F1D;--muted:#6B6860;--faint:#A09890;--accent:#2C5E3A;--accent-dim:#C8DDCC;--warn:#8F4E12;--warn-dim:#F5DFC3;--crit:#7A2219;--crit-dim:#F0C8C4;--ok:#2C5E3A;--ok-dim:#C8E0CC;--catastrophe:#6B3D63;--catastrophe-dim:#E8D5E3;}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     body{background:var(--bg);color:var(--text);font-family:var(--f-body);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;}
     .page{max-width:1280px;margin:0 auto;padding:48px 32px;}
@@ -57,7 +58,7 @@
     .mock-map{background:#0A1A10;position:relative;overflow:hidden;}
     .map-label{position:absolute;top:12px;left:12px;font-family:var(--f-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
     .map-dist{position:absolute;border-radius:2px;display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:var(--f-mono);font-size:9px;color:rgba(232,228,218,.7);letter-spacing:.04em;text-transform:uppercase;}
-    .d-goma{width:80px;height:60px;background:rgba(184,68,54,.35);border:1px solid rgba(184,68,54,.6);top:140px;left:100px;}
+    .d-goma{width:80px;height:60px;background:rgba(155,107,149,.35);border:1px solid rgba(155,107,149,.6);top:140px;left:100px;}
     .d-beni{width:70px;height:55px;background:rgba(201,123,56,.3);border:1px solid rgba(201,123,56,.55);top:80px;left:160px;}
     .d-butembo{width:65px;height:50px;background:rgba(201,123,56,.25);border:1px solid rgba(201,123,56,.45);top:30px;left:90px;}
     .d-uvira{width:75px;height:55px;background:rgba(74,124,89,.3);border:1px solid rgba(74,124,89,.5);top:210px;left:200px;}
@@ -118,8 +119,8 @@
     .badge-p2{background:var(--ok-dim);color:var(--ok);}
     .badge-p3{background:var(--warn-dim);color:var(--warn);}
     .badge-p4{background:#6B2E10;color:#E07A38;}
-    .badge-p5{background:var(--crit-dim);color:var(--crit);}
-    .dot-p2{background:var(--ok);}.dot-p3{background:var(--warn);}.dot-p4{background:#E07A38;}.dot-p5{background:var(--crit);}
+    .badge-p5{background:var(--catastrophe-dim);color:var(--catastrophe);}
+    .dot-p2{background:var(--ok);}.dot-p3{background:var(--warn);}.dot-p4{background:#E07A38;}.dot-p5{background:var(--catastrophe);}
 
     /* Stat cards */
     .card{background:var(--surface);border:1px solid var(--grid);border-radius:var(--r-lg);padding:20px 24px;}
@@ -210,7 +211,7 @@
           <div class="map-dist d-uvira"><span>Uvira</span><span class="badge badge-p2" style="font-size:8px;margin-top:3px;">P2</span></div>
           <div class="map-dist d-minembwe"><span>Minembwe</span><span class="badge badge-p3" style="font-size:8px;margin-top:3px;">P3</span></div>
           <div class="map-legend">
-            <div class="legend-row"><div class="legend-sw" style="background:rgba(184,68,54,.5);border:1px solid rgba(184,68,54,.7);"></div>IPC Phase 5 · Famine</div>
+            <div class="legend-row"><div class="legend-sw" style="background:rgba(155,107,149,.5);border:1px solid rgba(155,107,149,.7);"></div>IPC Phase 5 · Famine</div>
             <div class="legend-row"><div class="legend-sw" style="background:rgba(201,123,56,.4);border:1px solid rgba(201,123,56,.6);"></div>Phase 4 · Emergency</div>
             <div class="legend-row"><div class="legend-sw" style="background:rgba(201,123,56,.2);border:1px solid rgba(201,123,56,.4);"></div>Phase 3 · Crisis</div>
             <div class="legend-row"><div class="legend-sw" style="background:rgba(74,124,89,.3);border:1px solid rgba(74,124,89,.5);"></div>Phase 2 · Stressed</div>
