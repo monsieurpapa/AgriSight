@@ -2,6 +2,8 @@
 Tests for Sentinel Hub integration
 """
 
+import os
+import tempfile
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
@@ -10,6 +12,7 @@ from django.contrib.gis.geos import Polygon
 import requests
 
 from .client import SentinelHubClient
+from .batch_client import BatchClient
 from .utils import (
     geometry_to_bbox, format_datetime_for_sentinel, get_time_range_for_period,
     validate_bbox, calculate_area_km2, is_valid_vegetation_index_value
@@ -249,6 +252,85 @@ class SentinelHubIntegrationTest(TestCase):
                 bbox=bbox,
                 time_range=time_range,
                 index_type='invalid_index'
+            )
+
+
+class BatchClientTest(TestCase):
+    """Test cases for BatchClient S3 output discovery and download"""
+
+    def setUp(self):
+        self.client = BatchClient()
+        self.client.s3_bucket = 'test-bucket'
+        self.client.s3_access_key = 'test-access-key'
+        self.client.s3_secret_key = 'test-secret-key'
+        self.client.s3_endpoint_url = 'https://s3.example.com'
+
+    def _mock_s3(self, mock_get_s3_client, contents):
+        mock_s3 = MagicMock()
+        mock_paginator = MagicMock()
+        mock_paginator.paginate.return_value = [{'Contents': contents}]
+        mock_s3.get_paginator.return_value = mock_paginator
+        mock_get_s3_client.return_value = mock_s3
+        return mock_s3
+
+    @patch('apps.sentinel_hub.batch_client.BatchClient.get_s3_client')
+    def test_list_ndvi_outputs_parses_tile_and_date(self, mock_get_s3_client):
+        """Keys matching the defaultTilePath template are parsed into tile_id/date"""
+        self._mock_s3(mock_get_s3_client, [
+            {'Key': 'ndvi/tile-42/2024-01-15.tif'},
+        ])
+
+        outputs = self.client.list_ndvi_outputs()
+
+        self.assertEqual(len(outputs), 1)
+        self.assertEqual(outputs[0]['tile_id'], 'tile-42')
+        self.assertEqual(outputs[0]['key'], 'ndvi/tile-42/2024-01-15.tif')
+        self.assertEqual(outputs[0]['date'].year, 2024)
+        self.assertEqual(outputs[0]['date'].month, 1)
+        self.assertEqual(outputs[0]['date'].day, 15)
+
+    @patch('apps.sentinel_hub.batch_client.BatchClient.get_s3_client')
+    def test_list_ndvi_outputs_skips_unparseable_keys(self, mock_get_s3_client):
+        """Keys that don't match the expected layout or have an unparseable date are skipped, not fatal"""
+        self._mock_s3(mock_get_s3_client, [
+            {'Key': 'ndvi/tile-1/not-a-date.tif'},
+            {'Key': 'other-prefix/tile-2/2024-01-15.tif'},
+            {'Key': 'ndvi/tile-3/2024-02-01.tif'},
+        ])
+
+        outputs = self.client.list_ndvi_outputs()
+
+        self.assertEqual(len(outputs), 1)
+        self.assertEqual(outputs[0]['tile_id'], 'tile-3')
+
+    @patch('apps.sentinel_hub.batch_client.BatchClient.get_s3_client')
+    def test_list_ndvi_outputs_empty_bucket(self, mock_get_s3_client):
+        """No Contents key in a page (empty prefix) returns an empty list, not an error"""
+        mock_s3 = MagicMock()
+        mock_paginator = MagicMock()
+        mock_paginator.paginate.return_value = [{}]
+        mock_s3.get_paginator.return_value = mock_paginator
+        mock_get_s3_client.return_value = mock_s3
+
+        outputs = self.client.list_ndvi_outputs()
+
+        self.assertEqual(outputs, [])
+
+    @patch('apps.sentinel_hub.batch_client.BatchClient.get_s3_client')
+    def test_download_output_creates_dirs_and_downloads(self, mock_get_s3_client):
+        """download_output makes the local directory tree before invoking the S3 download"""
+        mock_s3 = MagicMock()
+        mock_get_s3_client.return_value = mock_s3
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            local_path = os.path.join(tmp_dir, 'nested', 'tile-1', 'out.tif')
+
+            result = self.client.download_output('ndvi/tile-1/2024-01-15.tif', local_path)
+
+            self.assertEqual(result, local_path)
+            self.assertTrue(os.path.isdir(os.path.dirname(local_path)))
+            mock_s3.download_file.assert_called_once_with(
+                'test-bucket', 'ndvi/tile-1/2024-01-15.tif', local_path
             )
 
 

@@ -5,6 +5,7 @@ Replaces mock implementations with actual satellite data processing.
 
 from celery import shared_task
 from datetime import datetime, timedelta
+import os
 import logging
 from typing import Dict, Any, List
 from django.utils import timezone
@@ -102,14 +103,84 @@ def monitor_batch_jobs(self):
                      job.status = 'PROCESSING' # Optimistic update, next poll will confirm
                      job.save()
                      
-                # Logic when DONE -> Ingest?
-                # In a real app, we would list objects from S3 here and create SatelliteImage records.
+                # Logic when DONE -> Ingest
                 if current_status == 'DONE':
-                    logger.info(f"Batch Job {job.request_id} completed. Ready for ingestion.")
-                    # TODO: Trigger ingestion from S3
-                    
+                    logger.info(f"Batch Job {job.request_id} completed. Ingesting outputs from S3.")
+                    ingested = _ingest_batch_job_outputs(job, client)
+                    job.tile_count = ingested
+                    job.save()
+                    logger.info(f"Batch Job {job.request_id}: ingested {ingested} new satellite image(s).")
+
         except Exception as e:
             logger.error(f"Error monitoring job {job.request_id}: {e}")
+
+
+def _ingest_batch_job_outputs(job: BatchJob, client: BatchClient) -> int:
+    """
+    List the NDVI tiles a completed batch job produced in S3, and create a
+    SatelliteImage + VegetationIndex record for each one not already ingested.
+
+    Outputs aren't scoped per-request in S3 (see list_ndvi_outputs docstring),
+    so this filters by the job's own time range as a best-effort correlation.
+    One bad/unreadable file does not abort ingestion of the rest.
+    """
+    processor = SatelliteDataProcessor()
+    tmp_dir = os.path.join(str(settings.MEDIA_ROOT), 'batch_ingest_tmp', job.request_id)
+
+    try:
+        outputs = client.list_ndvi_outputs()
+    except Exception as exc:
+        logger.error(f"Failed to list S3 outputs for batch job {job.request_id}: {exc}")
+        return 0
+
+    ingested_count = 0
+    for output in outputs:
+        acquisition_date = output['date']
+        if acquisition_date is None:
+            continue
+        if timezone.is_naive(acquisition_date):
+            acquisition_date = timezone.make_aware(acquisition_date)
+        if not (job.time_range_start <= acquisition_date <= job.time_range_end):
+            continue
+
+        image_path = f"s3://{job.s3_bucket}/{output['key']}"
+        if SatelliteImage.objects.filter(region=job.region, image_path=image_path).exists():
+            continue
+
+        try:
+            local_path = os.path.join(tmp_dir, output['tile_id'], os.path.basename(output['key']))
+            client.download_output(output['key'], local_path)
+
+            satellite_image = SatelliteImage.objects.create(
+                region=job.region,
+                acquisition_date=acquisition_date,
+                satellite_name='Sentinel-2',
+                cloud_cover_percentage=0.0,
+                resolution_meters=10.0,
+                bands_available=['NDVI'],
+                image_path=image_path,
+                processing_notes=f"Ingested from Sentinel Hub Batch V2 request {job.request_id}, tile {output['tile_id']}"
+            )
+
+            stats = processor._calculate_raster_statistics(local_path)
+            VegetationIndex.objects.create(
+                satellite_image=satellite_image,
+                index_type='NDVI',
+                mean_value=stats['mean'],
+                min_value=stats['min'],
+                max_value=stats['max'],
+                std_deviation=stats['std'],
+                raster_path=local_path
+            )
+            satellite_image.is_processed = True
+            satellite_image.save()
+            ingested_count += 1
+
+        except Exception as exc:
+            logger.error(f"Failed to ingest batch output {output['key']} for job {job.request_id}: {exc}")
+            continue
+
+    return ingested_count
 
 @shared_task(bind=True, max_retries=3)
 def process_region_satellite_data(self, region_id: str, start_date: str, end_date: str) -> Dict[str, Any]:

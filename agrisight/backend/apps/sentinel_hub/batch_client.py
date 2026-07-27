@@ -1,12 +1,21 @@
 import os
+import re
 import requests
 import json
 import logging
+from dateutil import parser as date_parser
 from oauthlib.oauth2 import BackendApplicationClient
 from requests_oauthlib import OAuth2Session
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+# Matches the path produced by create_batch_request's defaultTilePath template:
+# s3://{bucket}/ndvi/{tileid}/{date}.tif
+# The exact string Sentinel Hub substitutes for {date} isn't pinned down in the
+# public Batch V2 docs, so this only splits tile_id from the date stem -- the
+# stem itself is parsed leniently with dateutil in list_ndvi_outputs().
+NDVI_OUTPUT_KEY_RE = re.compile(r"^ndvi/(?P<tile_id>[^/]+)/(?P<date_stem>[^/]+)\.tif$")
 
 class BatchClient:
     """
@@ -158,11 +167,71 @@ class BatchClient:
         token = self.get_token()
         url = f"{self.BATCH_URL}/{request_id}"
         headers = {"Authorization": f"Bearer {token}"}
-        
+
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             return response.json().get('status')
         return None
+
+    def get_s3_client(self):
+        """
+        Boto3 S3 client configured for the CloudFerro-compatible output bucket.
+        Batch V2 has no API for listing per-request output tiles -- results are
+        only discoverable by listing the S3 bucket/prefix we control via the
+        request's `output.delivery` config (see create_batch_request).
+        """
+        import boto3
+        return boto3.client(
+            's3',
+            endpoint_url=self.s3_endpoint_url,
+            aws_access_key_id=self.s3_access_key,
+            aws_secret_access_key=self.s3_secret_key,
+        )
+
+    def list_ndvi_outputs(self, prefix="ndvi/"):
+        """
+        List NDVI output tiles written to S3, parsed from the key.
+
+        NOTE: defaultTilePath in create_batch_request is `ndvi/{tileid}/{date}.tif`
+        with no request_id segment, so outputs from different batch requests that
+        happen to share a tile+date are not distinguishable by key alone. Callers
+        must additionally filter by their own request's time range to scope results
+        to "probably mine" -- this is a known limitation, not a guarantee of
+        per-request isolation. See TODOS.md.
+
+        Returns:
+            list[dict]: [{'key': str, 'tile_id': str, 'date': datetime|None}, ...]
+        """
+        s3 = self.get_s3_client()
+        paginator = s3.get_paginator('list_objects_v2')
+        results = []
+        for page in paginator.paginate(Bucket=self.s3_bucket, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                match = NDVI_OUTPUT_KEY_RE.match(key)
+                if not match:
+                    logger.warning(f"Skipping S3 key with unexpected NDVI output format: {key}")
+                    continue
+                try:
+                    parsed_date = date_parser.parse(match.group('date_stem'))
+                except (ValueError, OverflowError):
+                    logger.warning(f"Could not parse date from S3 key: {key}")
+                    continue
+                results.append({
+                    'key': key,
+                    'tile_id': match.group('tile_id'),
+                    'date': parsed_date,
+                })
+        return results
+
+    def download_output(self, key, local_path):
+        """
+        Download a single output object from S3 to a local path.
+        """
+        s3 = self.get_s3_client()
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        s3.download_file(self.s3_bucket, key, local_path)
+        return local_path
 
     def _get_ndvi_evalscript(self):
         return """

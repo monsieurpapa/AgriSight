@@ -15,11 +15,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.geospatial.models import Region, SatelliteImage, VegetationIndex
 from apps.analytics.models import AgriculturalStressEvent
 from apps.organizations.models import Organization
+from .models import BatchJob
 from .processors import SatelliteDataProcessor, VegetationIndexCalculator
 from .tasks import (
     process_region_satellite_data,
     create_stress_alerts,
-    generate_vegetation_trend_analysis
+    generate_vegetation_trend_analysis,
+    monitor_batch_jobs,
+    _ingest_batch_job_outputs,
 )
 
 User = get_user_model()
@@ -669,3 +672,221 @@ class SatelliteProcessingIntegrationTest(TestCase):
         
         # Check processing result
         self.assertTrue(result['success'])
+
+
+class MonitorBatchJobsTest(TestCase):
+    """Test the monitor_batch_jobs periodic task's status transitions."""
+
+    def setUp(self):
+        self.region = Region.objects.create(
+            name='Test Region',
+            country='DRC',
+            province='North Kivu',
+            geometry='MULTIPOLYGON(((28.5 -1.5, 30.0 -1.5, 30.0 0.5, 28.5 0.5, 28.5 -1.5)))'
+        )
+
+    def _make_job(self, status, request_id='req-1'):
+        return BatchJob.objects.create(
+            request_id=request_id,
+            region=self.region,
+            status=status,
+            bbox=[28.5, -1.5, 30.0, 0.5],
+            time_range_start=timezone.make_aware(datetime(2024, 1, 1)),
+            time_range_end=timezone.make_aware(datetime(2024, 1, 31)),
+            s3_bucket='test-bucket'
+        )
+
+    @patch('apps.satellite_processing.tasks.BatchClient')
+    def test_analysis_done_triggers_start(self, mock_client_class):
+        """ANALYSIS_DONE should call execute_start and optimistically move to PROCESSING."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.get_request_status.return_value = 'ANALYSIS_DONE'
+
+        job = self._make_job('ANALYSING')
+
+        monitor_batch_jobs()
+
+        mock_client.execute_start.assert_called_once_with('req-1')
+        job.refresh_from_db()
+        self.assertEqual(job.status, 'PROCESSING')
+
+    @patch('apps.satellite_processing.tasks._ingest_batch_job_outputs')
+    @patch('apps.satellite_processing.tasks.BatchClient')
+    def test_done_triggers_ingestion_and_records_tile_count(self, mock_client_class, mock_ingest):
+        """DONE should ingest outputs and persist the count on the job."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.get_request_status.return_value = 'DONE'
+        mock_ingest.return_value = 3
+
+        job = self._make_job('PROCESSING')
+
+        monitor_batch_jobs()
+
+        mock_ingest.assert_called_once()
+        job.refresh_from_db()
+        self.assertEqual(job.status, 'DONE')
+        self.assertEqual(job.tile_count, 3)
+
+    @patch('apps.satellite_processing.tasks.BatchClient')
+    def test_terminal_jobs_are_not_polled(self, mock_client_class):
+        """Jobs already DONE/FAILED/CANCELED are excluded from the active queryset."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        self._make_job('DONE', request_id='req-done')
+        self._make_job('FAILED', request_id='req-failed')
+        self._make_job('CANCELED', request_id='req-canceled')
+
+        monitor_batch_jobs()
+
+        mock_client.get_request_status.assert_not_called()
+
+    @patch('apps.satellite_processing.tasks.BatchClient')
+    def test_unchanged_status_is_not_rewritten(self, mock_client_class):
+        """No-op poll (status unchanged) shouldn't touch the job or trigger side effects."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.get_request_status.return_value = 'ANALYSING'
+
+        job = self._make_job('ANALYSING')
+
+        monitor_batch_jobs()
+
+        mock_client.execute_start.assert_not_called()
+        job.refresh_from_db()
+        self.assertEqual(job.status, 'ANALYSING')
+
+    @patch('apps.satellite_processing.tasks.BatchClient')
+    def test_one_job_error_does_not_abort_others(self, mock_client_class):
+        """An exception while polling one job must not prevent polling the rest."""
+        def status_for(request_id):
+            if request_id == 'req-broken':
+                raise Exception("boom")
+            return 'ANALYSIS_DONE'
+
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.get_request_status.side_effect = status_for
+
+        self._make_job('ANALYSING', request_id='req-broken')
+        healthy_job = self._make_job('ANALYSING', request_id='req-healthy')
+
+        monitor_batch_jobs()
+
+        healthy_job.refresh_from_db()
+        self.assertEqual(healthy_job.status, 'PROCESSING')
+
+
+class IngestBatchJobOutputsTest(TestCase):
+    """Test the S3 -> SatelliteImage/VegetationIndex ingestion helper."""
+
+    def setUp(self):
+        self.region = Region.objects.create(
+            name='Test Region',
+            country='DRC',
+            province='North Kivu',
+            geometry='MULTIPOLYGON(((28.5 -1.5, 30.0 -1.5, 30.0 0.5, 28.5 0.5, 28.5 -1.5)))'
+        )
+        self.job = BatchJob.objects.create(
+            request_id='req-ingest',
+            region=self.region,
+            status='DONE',
+            bbox=[28.5, -1.5, 30.0, 0.5],
+            time_range_start=timezone.make_aware(datetime(2024, 1, 1)),
+            time_range_end=timezone.make_aware(datetime(2024, 1, 31)),
+            s3_bucket='test-bucket'
+        )
+        self.stats = {'mean': 0.5, 'min': 0.1, 'max': 0.9, 'std': 0.1}
+
+    def _output(self, tile_id='tile-1', date=None, key=None):
+        date = date or datetime(2024, 1, 15)
+        return {
+            'key': key or f'ndvi/{tile_id}/{date.date().isoformat()}.tif',
+            'tile_id': tile_id,
+            'date': date,
+        }
+
+    @patch('apps.satellite_processing.tasks.SatelliteDataProcessor')
+    def test_ingests_new_output_into_image_and_index(self, mock_processor_class):
+        mock_processor = MagicMock()
+        mock_processor_class.return_value = mock_processor
+        mock_processor._calculate_raster_statistics.return_value = self.stats
+
+        mock_client = MagicMock()
+        mock_client.list_ndvi_outputs.return_value = [self._output()]
+
+        count = _ingest_batch_job_outputs(self.job, mock_client)
+
+        self.assertEqual(count, 1)
+        self.assertEqual(SatelliteImage.objects.count(), 1)
+        image = SatelliteImage.objects.get()
+        self.assertTrue(image.is_processed)
+        self.assertEqual(image.image_path, 's3://test-bucket/ndvi/tile-1/2024-01-15.tif')
+
+        index = VegetationIndex.objects.get(satellite_image=image)
+        self.assertEqual(index.index_type, 'NDVI')
+        self.assertEqual(index.mean_value, 0.5)
+
+    @patch('apps.satellite_processing.tasks.SatelliteDataProcessor')
+    def test_skips_output_already_ingested(self, mock_processor_class):
+        output = self._output()
+        SatelliteImage.objects.create(
+            region=self.job.region,
+            acquisition_date=timezone.make_aware(output['date']),
+            satellite_name='Sentinel-2',
+            cloud_cover_percentage=0.0,
+            resolution_meters=10.0,
+            bands_available=['NDVI'],
+            image_path=f"s3://{self.job.s3_bucket}/{output['key']}",
+        )
+
+        mock_client = MagicMock()
+        mock_client.list_ndvi_outputs.return_value = [output]
+
+        count = _ingest_batch_job_outputs(self.job, mock_client)
+
+        self.assertEqual(count, 0)
+        self.assertEqual(SatelliteImage.objects.count(), 1)
+        mock_client.download_output.assert_not_called()
+
+    @patch('apps.satellite_processing.tasks.SatelliteDataProcessor')
+    def test_skips_output_outside_job_time_range(self, mock_processor_class):
+        out_of_range = self._output(date=datetime(2023, 6, 1))
+
+        mock_client = MagicMock()
+        mock_client.list_ndvi_outputs.return_value = [out_of_range]
+
+        count = _ingest_batch_job_outputs(self.job, mock_client)
+
+        self.assertEqual(count, 0)
+        self.assertEqual(SatelliteImage.objects.count(), 0)
+
+    @patch('apps.satellite_processing.tasks.SatelliteDataProcessor')
+    def test_per_output_failure_does_not_abort_remaining(self, mock_processor_class):
+        mock_processor = MagicMock()
+        mock_processor_class.return_value = mock_processor
+        mock_processor._calculate_raster_statistics.return_value = self.stats
+
+        mock_client = MagicMock()
+        mock_client.list_ndvi_outputs.return_value = [
+            self._output(tile_id='tile-bad'),
+            self._output(tile_id='tile-good'),
+        ]
+        mock_client.download_output.side_effect = [Exception("download failed"), None]
+
+        count = _ingest_batch_job_outputs(self.job, mock_client)
+
+        self.assertEqual(count, 1)
+        self.assertEqual(SatelliteImage.objects.count(), 1)
+
+    @patch('apps.satellite_processing.tasks.SatelliteDataProcessor')
+    def test_listing_failure_returns_zero(self, mock_processor_class):
+        mock_client = MagicMock()
+        mock_client.list_ndvi_outputs.side_effect = Exception("S3 unreachable")
+
+        count = _ingest_batch_job_outputs(self.job, mock_client)
+
+        self.assertEqual(count, 0)
+        self.assertEqual(SatelliteImage.objects.count(), 0)
