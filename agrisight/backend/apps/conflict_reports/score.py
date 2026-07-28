@@ -28,6 +28,8 @@ MAX_IDP = 500_000
 NDVI_ANOMALY_MAX_NEGATIVE = -50.0  # -50% = max vegetation stress
 # Rainfall: -60% deviation (drought) = 100 risk; +60% (flood) = also high risk
 RAINFALL_DEV_MAX = 60.0
+# Health alert: 0 confirmed cases = 0 score, 500+ confirmed cases = 100 score (informational proxy only)
+MAX_HEALTH_CASES = 500
 
 
 def compute_ndvi_score(ndvi_anomaly_pct: Optional[float]) -> Optional[float]:
@@ -59,6 +61,18 @@ def compute_rainfall_score(deviation_pct: Optional[float]) -> Optional[float]:
         return None
     abs_dev = abs(deviation_pct)
     return min(100.0, (abs_dev / RAINFALL_DEV_MAX) * 100.0)
+
+
+def compute_health_alert_score(confirmed_cases: Optional[float]) -> Optional[float]:
+    """
+    Normalise confirmed case count to 0-100.
+
+    Informational only — deliberately excluded from WEIGHTS/compute_composite so it does
+    not alter the existing IPC phase methodology. Surfaced in reports as a separate signal.
+    """
+    if confirmed_cases is None:
+        return None
+    return min(100.0, (confirmed_cases / MAX_HEALTH_CASES) * 100.0)
 
 
 def compute_composite(

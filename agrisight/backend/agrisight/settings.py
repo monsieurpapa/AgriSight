@@ -349,6 +349,11 @@ ACLED_EMAIL = config('ACLED_EMAIL', default='')
 REPORT_ACCESS_TOKEN = config('REPORT_ACCESS_TOKEN', default='dev-token-change-in-prod')
 CONFLICT_REPORT_FRONTEND_URL = config('CONFLICT_REPORT_FRONTEND_URL', default='http://localhost:5173')
 
+# HDX (Humanitarian Data Exchange) — health-alert sitrep data
+HDX_API_TOKEN = config('HDX_API_TOKEN', default='')
+HDX_RESOURCE_ID = config('HDX_RESOURCE_ID', default='')
+HDX_BASE_URL = config('HDX_BASE_URL', default='https://data.humdata.org/api/3/action/datastore_search')
+
 # Cache configuration
 CACHES = {
     'default': {

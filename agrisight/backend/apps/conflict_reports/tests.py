@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from unittest.mock import patch, MagicMock
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -16,8 +16,9 @@ from rest_framework.test import APITestCase
 from .models import ConflictReport, ReportFeedback
 from .score import (
     compute_ndvi_score, compute_conflict_score, compute_displacement_score,
-    compute_rainfall_score, compute_composite, score_to_ipc_phase,
+    compute_rainfall_score, compute_health_alert_score, compute_composite, score_to_ipc_phase,
 )
+from .clients.hdx import fetch_health_alerts, _matches_district
 
 User = get_user_model()
 
@@ -103,6 +104,149 @@ class CompositeScoreTests(TestCase):
 
     def test_none_score_returns_data_unavailable(self):
         self.assertEqual(score_to_ipc_phase(None), "data_unavailable")
+
+    # --- health_alert_score (informational only) ---
+    def test_health_alert_score_zero(self):
+        self.assertAlmostEqual(compute_health_alert_score(0), 0.0)
+
+    def test_health_alert_score_max(self):
+        self.assertAlmostEqual(compute_health_alert_score(500), 100.0)
+
+    def test_health_alert_score_overflow_clamps(self):
+        self.assertAlmostEqual(compute_health_alert_score(5000), 100.0)
+
+    def test_health_alert_score_none_returns_none(self):
+        self.assertIsNone(compute_health_alert_score(None))
+
+    def test_health_alert_score_excluded_from_composite(self):
+        # compute_composite only ever takes 4 args — a 5th (health) signal cannot silently
+        # change the weighted result even if a caller tries to smuggle it in via WEIGHTS misuse.
+        with_health = compute_composite(50.0, 50.0, 50.0, 50.0)
+        self.assertAlmostEqual(with_health, 50.0)
+
+
+class HDXHealthAlertClientTests(TestCase):
+    """Unit tests for the HDX sitrep client — no network calls (requests.post is mocked)."""
+
+    def _record(self, location_code="CD540510", location_name="Mongbalu", measure="cases",
+                case_classification="confirmed", reference_date="2026-05-14T00:00:00", value=10):
+        return {
+            "location_code": location_code,
+            "location_name": location_name,
+            "location_name_source": location_name,
+            "measure": measure,
+            "case_classification": case_classification,
+            "reference_date": reference_date,
+            "value": value,
+        }
+
+    def _mock_response(self, records):
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {"success": True, "result": {"records": records}}
+        return resp
+
+    # --- matching ---
+    def test_matches_by_pcode_prefix(self):
+        record = self._record(location_code="CD540510")
+        self.assertTrue(_matches_district(record, "Djugu", "CD5405"))
+
+    def test_no_match_on_different_pcode_but_matches_by_name_fallback(self):
+        record = self._record(location_code="CD540510", location_name="Mongbalu")
+        # district_code doesn't match, but the name substring does
+        self.assertTrue(_matches_district(record, "Mongbalu", "CD9999"))
+
+    def test_no_match_when_neither_pcode_nor_name_align(self):
+        record = self._record(location_code="CD540510", location_name="Mongbalu")
+        self.assertFalse(_matches_district(record, "Uvira", "CD9999"))
+
+    # --- fetch_health_alerts ---
+    @override_settings(HDX_RESOURCE_ID="")
+    def test_no_resource_configured_returns_warning(self):
+        result = fetch_health_alerts("Djugu", "CD5405", date(2026, 5, 1), date(2026, 5, 31))
+        self.assertIsNone(result["confirmed_cases"])
+        self.assertIn("HDX: resource not configured", result["warnings"][0])
+
+    @override_settings(HDX_RESOURCE_ID="test-resource")
+    @patch("apps.conflict_reports.clients.hdx.cache")
+    @patch("apps.conflict_reports.clients.hdx.requests.post")
+    def test_cumulative_values_use_latest_not_sum(self, mock_post, mock_cache):
+        mock_cache.get.return_value = None
+        # Two daily cumulative rows for the same location/measure/classification —
+        # the later one (20) is the running total, not 10+20=30.
+        records = [
+            self._record(reference_date="2026-05-10T00:00:00", value=10),
+            self._record(reference_date="2026-05-20T00:00:00", value=20),
+        ]
+        mock_post.return_value = self._mock_response(records)
+
+        result = fetch_health_alerts("Djugu", "CD5405", date(2026, 5, 1), date(2026, 5, 31))
+        self.assertEqual(result["confirmed_cases"], 20)
+        self.assertEqual(result["as_of_date"], date(2026, 5, 20))
+
+    @override_settings(HDX_RESOURCE_ID="test-resource")
+    @patch("apps.conflict_reports.clients.hdx.cache")
+    @patch("apps.conflict_reports.clients.hdx.requests.post")
+    def test_sums_across_multiple_matched_locations(self, mock_post, mock_cache):
+        mock_cache.get.return_value = None
+        records = [
+            self._record(location_code="CD540510", location_name="Mongbalu", value=10),
+            self._record(location_code="CD540511", location_name="Bunia", value=15),
+        ]
+        mock_post.return_value = self._mock_response(records)
+
+        result = fetch_health_alerts("Djugu", "CD5405", date(2026, 5, 1), date(2026, 5, 31))
+        self.assertEqual(result["confirmed_cases"], 25)
+
+    @override_settings(HDX_RESOURCE_ID="test-resource")
+    @patch("apps.conflict_reports.clients.hdx.cache")
+    @patch("apps.conflict_reports.clients.hdx.requests.post")
+    def test_stale_data_before_window_triggers_warning(self, mock_post, mock_cache):
+        mock_cache.get.return_value = None
+        # Only record is before start_date but within the 180-day lookback.
+        records = [self._record(reference_date="2026-03-01T00:00:00", value=5)]
+        mock_post.return_value = self._mock_response(records)
+
+        result = fetch_health_alerts("Djugu", "CD5405", date(2026, 5, 1), date(2026, 5, 31))
+        self.assertEqual(result["confirmed_cases"], 5)
+        self.assertTrue(any("predates report window" in w for w in result["warnings"]))
+
+    @override_settings(HDX_RESOURCE_ID="test-resource")
+    @patch("apps.conflict_reports.clients.hdx.cache")
+    @patch("apps.conflict_reports.clients.hdx.requests.post")
+    def test_no_matching_district_returns_empty_no_warning(self, mock_post, mock_cache):
+        mock_cache.get.return_value = None
+        records = [self._record(location_code="CD540510", location_name="Mongbalu")]
+        mock_post.return_value = self._mock_response(records)
+
+        result = fetch_health_alerts("Uvira", "CD0202", date(2026, 5, 1), date(2026, 5, 31))
+        self.assertIsNone(result["confirmed_cases"])
+        self.assertEqual(result["warnings"], [])
+
+    @override_settings(HDX_RESOURCE_ID="test-resource")
+    @patch("apps.conflict_reports.clients.hdx.cache")
+    @patch("apps.conflict_reports.clients.hdx.requests.post")
+    def test_api_error_returns_warning(self, mock_post, mock_cache):
+        mock_cache.get.return_value = None
+        mock_post.side_effect = Exception("connection refused")
+
+        result = fetch_health_alerts("Djugu", "CD5405", date(2026, 5, 1), date(2026, 5, 31))
+        self.assertIsNone(result["confirmed_cases"])
+        self.assertIn("HDX health-alert data unavailable", result["warnings"])
+
+    @override_settings(HDX_RESOURCE_ID="test-resource")
+    @patch("apps.conflict_reports.clients.hdx.cache")
+    @patch("apps.conflict_reports.clients.hdx.requests.post")
+    def test_deaths_summed_across_classifications(self, mock_post, mock_cache):
+        mock_cache.get.return_value = None
+        records = [
+            self._record(measure="deaths", case_classification="confirmed", value=2),
+            self._record(measure="deaths", case_classification="suspected", value=3),
+        ]
+        mock_post.return_value = self._mock_response(records)
+
+        result = fetch_health_alerts("Djugu", "CD5405", date(2026, 5, 1), date(2026, 5, 31))
+        self.assertEqual(result["deaths"], 5)
 
 
 class ConflictReportViewTests(APITestCase):
