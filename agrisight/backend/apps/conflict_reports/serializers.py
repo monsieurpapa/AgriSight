@@ -35,6 +35,8 @@ class ReportDataSnapshotSerializer(serializers.ModelSerializer):
             "conflict_event_count", "conflict_density_score",
             "idp_count", "displacement_score",
             "rainfall_mm", "rainfall_deviation_pct", "rainfall_score",
+            "health_confirmed_cases", "health_suspected_cases", "health_deaths",
+            "health_alert_score", "health_data_as_of",
             "composite_score", "ipc_phase_proxy",
             "data_warnings",
         ]

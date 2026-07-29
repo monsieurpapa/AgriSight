@@ -17,7 +17,7 @@ class NDVIBaselineAdmin(admin.ModelAdmin):
 
 @admin.register(ReportDataSnapshot)
 class ReportDataSnapshotAdmin(admin.ModelAdmin):
-    list_display = ["report", "region", "composite_score", "ipc_phase_proxy"]
+    list_display = ["report", "region", "composite_score", "ipc_phase_proxy", "health_confirmed_cases", "health_deaths"]
     list_filter = ["ipc_phase_proxy"]
 
 

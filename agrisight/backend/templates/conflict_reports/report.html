@@ -71,6 +71,7 @@
       <th>Conflict Events</th>
       <th>IDPs (est.)</th>
       <th>Rainfall Dev.</th>
+      <th>Health Alerts (HDX)</th>
       <th>Composite Score</th>
       <th>AgriSight Risk Phase</th>
     </tr>
@@ -99,6 +100,13 @@
           {{ snap.rainfall_deviation_pct|floatformat:1 }}%
         {% else %}<span style="color:#9ca3af">N/A</span>{% endif %}
       </td>
+      <td>
+        {% if snap.health_confirmed_cases is not None or snap.health_deaths is not None %}
+          {% if snap.health_confirmed_cases is not None %}{{ snap.health_confirmed_cases|floatformat:0 }} cases{% endif %}
+          {% if snap.health_deaths is not None %}, {{ snap.health_deaths|floatformat:0 }} deaths{% endif %}
+          {% if snap.health_data_as_of %}<br><span style="color:#9ca3af;font-size:8pt;">as of {{ snap.health_data_as_of }}</span>{% endif %}
+        {% else %}<span style="color:#9ca3af">N/A</span>{% endif %}
+      </td>
       <td class="score-cell
         {% if snap.composite_score is not None %}
           {% if snap.composite_score <= 20 %}phase-1
@@ -123,7 +131,7 @@
     </tr>
     {% endwith %}
     {% empty %}
-    <tr><td colspan="8" style="text-align:center;color:#9ca3af;">No district data available.</td></tr>
+    <tr><td colspan="9" style="text-align:center;color:#9ca3af;">No district data available.</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -134,6 +142,8 @@
   Composite score = NDVI anomaly (30%) + conflict density (35%) + displacement flow (25%) + rainfall deviation (10%).
   Each signal is normalised 0–100. Null signals are excluded and weights are redistributed proportionally.
   Phase thresholds: 0–20 = Phase 1, 21–40 = Phase 2, 41–60 = Phase 3, 61–80 = Phase 4, 81–100 = Phase 5.
+  Health alert figures (HDX sitrep) are shown for situational awareness only and are <strong>not</strong> included
+  in the composite score or risk phase.
 </p>
 {% endif %}
 
@@ -144,7 +154,7 @@
 
 <div class="footer">
   AgriSight &mdash; Conflict-Aware Food Security Monitoring &mdash; Eastern DRC Pilot
-  &nbsp;|&nbsp; Data sources: ACLED, UNHCR, CHIRPS, Sentinel Hub (Copernicus)
+  &nbsp;|&nbsp; Data sources: ACLED, UNHCR, CHIRPS, Sentinel Hub (Copernicus), HDX (INRB-UMIE sitreps)
   &nbsp;|&nbsp; Not for redistribution without analyst review.
 </div>
 

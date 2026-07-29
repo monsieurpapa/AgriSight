@@ -13,9 +13,11 @@ from .models import ConflictReport, NDVIBaseline, RainfallBaseline, ReportDataSn
 from .clients.acled import fetch_conflict_events
 from .clients.unhcr import fetch_displacement_data
 from .clients.chirps import fetch_rainfall_anomaly
+from .clients.hdx import fetch_health_alerts
 from .score import (
     compute_ndvi_score, compute_conflict_score,
     compute_displacement_score, compute_rainfall_score,
+    compute_health_alert_score,
     compute_composite, score_to_ipc_phase,
 )
 from .pdf import render_report_pdf
@@ -59,6 +61,8 @@ def generate_conflict_report(self, report_id: str):
         conflict_score = compute_conflict_score(snap_data.get("conflict_event_count"))
         displacement_score = compute_displacement_score(snap_data.get("idp_count"))
         rainfall_score = compute_rainfall_score(snap_data.get("rainfall_deviation_pct"))
+        # Informational only — deliberately excluded from compute_composite (see score.py).
+        health_alert_score = compute_health_alert_score(snap_data.get("health_confirmed_cases"))
 
         composite = compute_composite(ndvi_score, conflict_score, displacement_score, rainfall_score)
         ipc_phase = score_to_ipc_phase(composite)
@@ -67,6 +71,7 @@ def generate_conflict_report(self, report_id: str):
         snap_data["conflict_density_score"] = conflict_score
         snap_data["displacement_score"] = displacement_score
         snap_data["rainfall_score"] = rainfall_score
+        snap_data["health_alert_score"] = health_alert_score
         snap_data["composite_score"] = composite
         snap_data["ipc_phase_proxy"] = ipc_phase
 
@@ -88,6 +93,11 @@ def generate_conflict_report(self, report_id: str):
                 "rainfall_mm": snap_data.get("rainfall_mm"),
                 "rainfall_deviation_pct": snap_data.get("rainfall_deviation_pct"),
                 "rainfall_score": snap_data.get("rainfall_score"),
+                "health_confirmed_cases": snap_data.get("health_confirmed_cases"),
+                "health_suspected_cases": snap_data.get("health_suspected_cases"),
+                "health_deaths": snap_data.get("health_deaths"),
+                "health_alert_score": snap_data.get("health_alert_score"),
+                "health_data_as_of": snap_data.get("health_data_as_of"),
                 "composite_score": snap_data.get("composite_score"),
                 "ipc_phase_proxy": snap_data.get("ipc_phase_proxy", ""),
                 "data_warnings": snap_data.get("warnings", []),
@@ -140,13 +150,17 @@ def _fetch_district_data(district: Region, start: date, end: date) -> dict:
     def fetch_chirps():
         return fetch_rainfall_anomaly(district.geometry.geojson, start, end, district=district)
 
+    def fetch_hdx():
+        return fetch_health_alerts(district.name, district.code, start, end)
+
     results = {}
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {
             "ndvi": executor.submit(fetch_ndvi),
             "acled": executor.submit(fetch_acled),
             "unhcr": executor.submit(fetch_unhcr),
             "chirps": executor.submit(fetch_chirps),
+            "hdx": executor.submit(fetch_hdx),
         }
         for key, fut in futures.items():
             try:
@@ -162,6 +176,7 @@ def _fetch_district_data(district: Region, start: date, end: date) -> dict:
     acled_result = results.get("acled", {})
     unhcr_result = results.get("unhcr", {})
     chirps_result = results.get("chirps", {})
+    hdx_result = results.get("hdx", {})
 
     ndvi_current = ndvi_result.get("ndvi_current")
     ndvi_anomaly = None
@@ -173,6 +188,7 @@ def _fetch_district_data(district: Region, start: date, end: date) -> dict:
         + acled_result.get("warnings", [])
         + unhcr_result.get("warnings", [])
         + chirps_result.get("warnings", [])
+        + hdx_result.get("warnings", [])
     )
 
     return {
@@ -183,6 +199,10 @@ def _fetch_district_data(district: Region, start: date, end: date) -> dict:
         "idp_count": unhcr_result.get("idp_count"),
         "rainfall_mm": chirps_result.get("rainfall_mm"),
         "rainfall_deviation_pct": chirps_result.get("deviation_pct"),
+        "health_confirmed_cases": hdx_result.get("confirmed_cases"),
+        "health_suspected_cases": hdx_result.get("suspected_cases"),
+        "health_deaths": hdx_result.get("deaths"),
+        "health_data_as_of": hdx_result.get("as_of_date"),
         "warnings": all_warnings,
         "signals_detail": {
             "acled_sample": acled_result.get("events_detail", []),

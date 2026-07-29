@@ -26,7 +26,8 @@ def render_report_pdf(report, snapshots: list, warnings: list) -> bytes:
         "disclaimer": (
             "AgriSight Risk Score (preliminary) — This classification is an automated proxy "
             "based on ACLED, UNHCR, CHIRPS, and Sentinel-2 data. It is NOT an official IPC "
-            "classification. Use alongside field assessments and professional judgment."
+            "classification. Use alongside field assessments and professional judgment. "
+            "Health alert figures (HDX) are informational only and do not affect this score."
         ),
     }
     html_content = render_to_string("conflict_reports/report.html", context)

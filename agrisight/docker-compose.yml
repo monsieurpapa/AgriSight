@@ -67,6 +67,12 @@ services:
              python manage.py load_ocha_boundaries --url https://data.humdata.org/dataset/cod-ab-cod/resource/drc_admbnda_adm2_ocha_itos_20190401.geojson || true &&
              python manage.py collectstatic --noinput &&
              gunicorn --bind 0.0.0.0:8000 --workers 3 agrisight.wsgi:application"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), 2)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
 
   # Celery Worker
   celery_worker:
@@ -142,8 +148,10 @@ services:
       - static_files:/var/www/static
       - media_files:/var/www/media
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
 
   # HAProxy
   haproxy:

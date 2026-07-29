@@ -25,7 +25,7 @@ WORKDIR /app
 
 # Install uv and dependencies
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-COPY celery_beat/requirements.txt /app/requirements.txt
+COPY backend/requirements.txt /app/requirements.txt
 RUN UV_SYSTEM_PYTHON=1 uv pip install --system -r requirements.txt
 
 # Copy backend code (needed for Django models and settings)
