@@ -65,6 +65,31 @@ delivery when a district risk score crosses a threshold.
 product modes. Alerts enable the "embedded in response protocols" vision.
 **Effort:** S (human: 2 days / CC: 30 min — infrastructure exists)
 
+### [P1] ISSUE-003 (found by /qa on 2026-07-30): WebSocket reconnect storm hangs the
+app blank immediately after login
+**What:** `nginx.conf` has no `location /ws/` block, so `/ws/` falls through to
+`location /` and gets proxied to the static `frontend` container instead of
+`django_backend` — every WebSocket upgrade fails instantly. Separately, `backend`
+runs via `gunicorn ... agrisight.wsgi:application` (WSGI), and Django Channels
+consumers require an ASGI server (daphne/uvicorn) regardless of nginx routing.
+The frontend connects unconditionally on every authenticated page load, and the
+reconnect loop in `useWebSocket.js`/`WebSocketContext.jsx` fires far faster than
+its own coded backoff (`reconnectInterval * attempts`, capped at 5) should allow —
+looks like the provider is being re-mounted/re-triggered on every render rather
+than reconnecting on a clean singleton timer. Net effect: the whole authenticated
+app renders a blank white page after login when accessed via the documented
+HAProxy (`:8080`) → Nginx (`:80`) path. Report: `.gstack/qa-reports/qa-report-agrisight-2026-07-30.md`.
+**Why:** This sharpens the "Real-time WebSocket alerts" item above — it's not just
+an unbuilt feature anymore, the half-wired frontend is actively breaking login for
+anyone not hitting the frontend dev server or `:8000` directly.
+**Context:** Two viable paths — (a) short-term: gate the WebSocket connection
+behind a feature flag until the backend is ASGI-capable, and fix the reconnect
+loop regardless; (b) full activation: add the missing nginx `/ws/` proxy block
+and switch `backend`'s command to `daphne`/`uvicorn` (this is effectively the
+"Real-time WebSocket alerts" P2 item above, promoted to P1 because of user impact).
+**Effort:** XS for the short-term flag/backoff fix (CC: ~30 min) / S for full
+activation (same estimate as the P2 item above, since it's the same work).
+
 ---
 
 ## Approach B: Expansion
