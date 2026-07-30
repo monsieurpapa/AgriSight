@@ -32,22 +32,31 @@ pattern as ISSUE-003's WebSocketContext bug. Did not visibly break rendering in
 this session (dashboard displayed correctly despite the warning), but worth
 fixing before it does — see the new tech-debt item below.
 
-### [P2] `hasPermission` (AuthContext) is recreated every render, likely causing an effect re-fire loop
-**What:** `AuthContext.jsx`'s `hasPermission` is a plain `const hasPermission = (permission) => {...}`
-inside `AuthProvider`, not memoized with `useCallback`. `Dashboard.jsx`'s
-data-fetch `useEffect` depends on `[hasPermission]`, so it re-fires (and
-re-fetches) every time `AuthProvider` re-renders, regardless of whether
-anything relevant to auth actually changed. React logs `Maximum update depth
-exceeded` from this during normal dashboard use (found 2026-07-30, while
-verifying the ISSUE-004 fix).
-**Why:** Same shape as the ISSUE-003 WebSocketContext bug (unstable callback
-reference in a dependency array) — worth checking whether other consumers of
-`hasPermission` have the same problem before it causes a visible hang like
-ISSUE-003 did.
-**Context:** Wrap `hasPermission` in `useCallback` in `AuthContext.jsx`; check
-`PermissionRoute` in `App.jsx` and any other `useEffect`/`useMemo` that
-depends on it.
-**Effort:** XS (CC: ~15 min)
+### ~~[P2] ISSUE-005: `hasPermission` (AuthContext) recreated every render / dashboard "Maximum update depth exceeded"~~
+~~Fixed 2026-07-30, in two parts:~~
+
+~~**Part A (a real but not-the-actual-cause fix):** `AuthContext.jsx` had `hasPermission`,
+`hasRole`, `isAdmin`, `getUserType`, `getUserTypeLabel`, `getDefaultPath`, `clearError`,
+and every async auth action as plain functions recreated every `AuthProvider` render,
+with the context `value` object also a fresh literal each render. Wrapped all of them
+in `useCallback`/`useMemo`. Added a regression test that forces `AuthProvider` itself
+to re-render and asserts `hasPermission` keeps the same reference (verified it fails
+pre-fix, passes post-fix). Worthwhile on its own, but turned out NOT to be what was
+actually causing the warning — see Part B.~~
+
+~~**Part B (the real cause):** `Dashboard.jsx`'s real-time-updates `useEffect` depended
+on `[realTimeData, dashboardData]` while unconditionally calling
+`setDashboardData(prev => ({...prev, ...}))` inside itself. Since that always produces
+a new object reference and `dashboardData` was in the effect's own dependency array,
+every run retriggered another run — an unconditional infinite loop, independent of
+AuthContext entirely. React's update-depth guard caught it and only logged a warning
+rather than hanging the tab, but it was a real, always-reproducing bug. Fixed by
+depending only on `realTimeData` and reading current `dashboardData` through the
+functional `setDashboardData` updater (with a null guard for pre-initial-fetch).~~
+
+~~Verified via Vite dev server: no "Maximum update depth exceeded" anywhere on the page
+after 8s of dashboard use (previously fired within ~1s of every render). Commits:
+`c846c8a` (Part A), `e1ee714` (Part B).~~
 
 ---
 
