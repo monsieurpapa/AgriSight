@@ -48,6 +48,22 @@ import {
   formatArea
 } from '../lib/utils';
 
+// Several endpoints backed by GeoDjango models (regions, stress events, conflict
+// events) are served by a GeoFeatureModelSerializer, so their list data comes
+// back as a GeoJSON FeatureCollection ({type, features: [...]}) rather than a
+// plain array, with each item's fields nested under `.properties`. Normalize
+// to flat objects so callers can use region.name / event.severity etc. as if
+// it were a regular DRF list response.
+export const toFlatFeatureList = (value) => {
+  if (!value) return [];
+  const features = Array.isArray(value) ? value : (value.features || []);
+  return features.map(feature =>
+    feature && feature.type === 'Feature'
+      ? { id: feature.id, ...feature.properties, geometry: feature.geometry }
+      : feature
+  );
+};
+
 const Dashboard = () => {
   const { user, hasPermission } = useAuth();
   const { isConnected, realTimeData, notifications } = useWebSocketContext();
@@ -74,8 +90,10 @@ const Dashboard = () => {
         setWarnings(data.errors || []);
 
         const regionsData = data.regions || { count: 0, results: [] };
-        const regionsList = regionsData.results || [];
+        const regionsList = toFlatFeatureList(regionsData.results);
         const regionsCount = regionsData.count ?? regionsList.length;
+        const recentStressEvents = toFlatFeatureList(data.stressSummary?.recent_events);
+        const recentConflictEvents = toFlatFeatureList(data.conflictSummary?.recent_events);
         const alertsData = data.alerts || { count: 0, results: [] };
         const reportsData = data.reports || { count: 0, results: [] };
         const organizationsData = data.organizations || { count: 0, results: [] };
@@ -94,23 +112,23 @@ const Dashboard = () => {
           },
           recentActivity: [
             // Recent stress events
-            ...(data.stressSummary?.recent_events?.slice(0, 2).map(event => ({
+            ...recentStressEvents.slice(0, 2).map(event => ({
               id: `stress-${event.id}`,
               type: 'alert',
               title: 'Agricultural stress detected',
               description: `${event.stress_type} stress in ${event.region?.name || 'Unknown region'}`,
               timestamp: event.detection_date,
               status: event.severity === 'high' ? 'warning' : 'completed'
-            })) || []),
+            })),
             // Recent conflict events
-            ...(data.conflictSummary?.recent_events?.slice(0, 1).map(event => ({
+            ...recentConflictEvents.slice(0, 1).map(event => ({
               id: `conflict-${event.id}`,
               type: 'alert',
               title: 'Conflict event reported',
               description: `${event.event_type} in ${event.region?.name || 'Unknown region'}`,
               timestamp: event.event_date,
               status: 'warning'
-            })) || []),
+            })),
             // Processing activity
             {
               id: 'processing-1',
