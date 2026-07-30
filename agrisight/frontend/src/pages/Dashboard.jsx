@@ -213,30 +213,44 @@ const Dashboard = () => {
   }, [hasPermission]);
 
   // Handle real-time updates
+  //
+  // Regression: this effect used to depend on [realTimeData, dashboardData]
+  // while also unconditionally calling setDashboardData inside itself. Since
+  // setDashboardData always produces a new object (via spread) even when the
+  // computed values are unchanged, and dashboardData was in the dependency
+  // array, every run retriggered another run — an infinite loop. React's own
+  // update-depth guard caught it and logged "Maximum update depth exceeded"
+  // rather than actually hanging the tab, but it was still a real bug. Fixed
+  // by depending only on realTimeData (the actual trigger for this effect)
+  // and reading/guarding on the current dashboardData through the functional
+  // setDashboardData updater instead. Found by /qa on 2026-07-30.
   useEffect(() => {
-    if (realTimeData && dashboardData) {
-      // Update recent activity with new stress events
-      const newStressEvents = realTimeData.stressEvents.slice(0, 2).map(event => ({
-        id: `stress-${event.id}`,
-        type: 'alert',
-        title: 'Agricultural stress detected',
-        description: `${event.stress_type} stress in ${event.region?.name || 'Unknown region'}`,
-        timestamp: event.detection_date,
-        status: event.severity === 'high' ? 'warning' : 'completed'
-      }));
+    if (!realTimeData) return;
 
-      // Update recent activity with new conflict events
-      const newConflictEvents = (realTimeData.conflictEvents || []).slice(0, 1).map(event => ({
-        id: `conflict-${event.id}`,
-        type: 'alert',
-        title: 'Conflict event reported',
-        description: `${event.event_type} in ${event.region?.name || 'Unknown region'}`,
-        timestamp: event.event_date,
-        status: 'warning'
-      }));
+    // Update recent activity with new stress events
+    const newStressEvents = realTimeData.stressEvents.slice(0, 2).map(event => ({
+      id: `stress-${event.id}`,
+      type: 'alert',
+      title: 'Agricultural stress detected',
+      description: `${event.stress_type} stress in ${event.region?.name || 'Unknown region'}`,
+      timestamp: event.detection_date,
+      status: event.severity === 'high' ? 'warning' : 'completed'
+    }));
 
-      // Update dashboard data with real-time information
-      setDashboardData(prev => ({
+    // Update recent activity with new conflict events
+    const newConflictEvents = (realTimeData.conflictEvents || []).slice(0, 1).map(event => ({
+      id: `conflict-${event.id}`,
+      type: 'alert',
+      title: 'Conflict event reported',
+      description: `${event.event_type} in ${event.region?.name || 'Unknown region'}`,
+      timestamp: event.event_date,
+      status: 'warning'
+    }));
+
+    // Update dashboard data with real-time information
+    setDashboardData(prev => {
+      if (!prev) return prev;
+      return {
         ...prev,
         stats: {
           ...prev.stats,
@@ -248,9 +262,9 @@ const Dashboard = () => {
           ...newConflictEvents,
           ...prev.recentActivity.slice(0, 3 - newStressEvents.length - newConflictEvents.length)
         ]
-      }));
-    }
-  }, [realTimeData, dashboardData]);
+      };
+    });
+  }, [realTimeData]);
 
   if (loading) {
     return (
