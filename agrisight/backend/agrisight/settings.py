@@ -214,6 +214,10 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:80",
+    "http://127.0.0.1:80",
 ]
 
 # Respect X-Forwarded-Proto when behind a reverse proxy (set USE_X_FORWARDED_PROTO=True)
