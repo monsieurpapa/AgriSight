@@ -2,13 +2,19 @@
 Comprehensive tests for core middleware and utilities.
 """
 
-from django.test import TestCase, RequestFactory, Client
+from django.test import TestCase, TransactionTestCase, RequestFactory, Client
 from django.contrib.auth import get_user_model
 from django.http import HttpResponse
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import DatabaseError
 from unittest.mock import patch, MagicMock
 import json
+
+from channels.testing import WebsocketCommunicator
+from channels.routing import URLRouter
+from channels.auth import AuthMiddlewareStack
+from channels.db import database_sync_to_async
+from .routing import websocket_urlpatterns
 
 from .middleware import (
     ErrorHandlingMiddleware,
@@ -439,3 +445,64 @@ def assertHasAttr(obj, attr):
     """Assert that an object has an attribute."""
     if not hasattr(obj, attr):
         raise AssertionError(f"Object {obj} does not have attribute {attr}")
+
+
+class AgriSightConsumerTests(TransactionTestCase):
+    """
+    Regression: ISSUE-003 — the WebSocket path (nginx /ws/ route + ASGI serving)
+    was never activated, so these consumers were unreachable in practice even
+    though the routing/consumer code has existed for a while. Found by /qa on
+    2026-07-30. Report: .gstack/qa-reports/qa-report-agrisight-2026-07-30.md
+
+    Uses TransactionTestCase (not TestCase) because the async consumer's
+    database_sync_to_async calls run in a separate thread — TestCase's
+    per-test transaction wrapping shares one connection across threads and
+    raises "connection already closed" under async access.
+    """
+
+    def _make_session_cookie_header(self, user):
+        from django.contrib.auth import SESSION_KEY, BACKEND_SESSION_KEY, HASH_SESSION_KEY
+        from django.contrib.sessions.backends.db import SessionStore
+
+        session = SessionStore()
+        session[SESSION_KEY] = str(user.pk)
+        session[BACKEND_SESSION_KEY] = 'django.contrib.auth.backends.ModelBackend'
+        session[HASH_SESSION_KEY] = user.get_session_auth_hash()
+        session.save()
+        return [(b'cookie', f'sessionid={session.session_key}'.encode())]
+
+    async def test_unauthenticated_connection_is_rejected(self):
+        application = AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+        communicator = WebsocketCommunicator(application, '/ws/')
+        connected, subprotocol = await communicator.connect()
+        self.assertFalse(connected)
+        await communicator.disconnect()
+
+    async def test_authenticated_connection_is_accepted(self):
+        user = await database_sync_to_async(User.objects.create_user)(
+            username='wsuser', email='wsuser@example.com', password='testpass123'
+        )
+        headers = await database_sync_to_async(self._make_session_cookie_header)(user)
+
+        application = AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+        communicator = WebsocketCommunicator(application, '/ws/', headers=headers)
+        connected, subprotocol = await communicator.connect()
+        self.assertTrue(connected)
+        await communicator.disconnect()
+
+    async def test_ping_receives_pong(self):
+        user = await database_sync_to_async(User.objects.create_user)(
+            username='wsuser2', email='wsuser2@example.com', password='testpass123'
+        )
+        headers = await database_sync_to_async(self._make_session_cookie_header)(user)
+
+        application = AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+        communicator = WebsocketCommunicator(application, '/ws/', headers=headers)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+
+        await communicator.send_json_to({'type': 'ping'})
+        response = await communicator.receive_json_from()
+        self.assertEqual(response, {'type': 'pong'})
+
+        await communicator.disconnect()

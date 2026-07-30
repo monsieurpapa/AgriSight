@@ -54,6 +54,10 @@ django-ratelimit==4.1.0
 # WebSocket support
 channels==4.0.0
 channels-redis==4.1.0
+uvicorn[standard]==0.24.0
+# daphne is only needed by channels.testing (ChannelsLiveServerTestCase pulls it
+# in unconditionally at import time) — the ASGI server itself is uvicorn above.
+daphne==4.1.0
 
 # Launch Readiness Enhancements
 django-simple-history==3.4.0
