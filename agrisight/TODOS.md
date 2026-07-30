@@ -7,22 +7,47 @@ Approach A = conflict-aware report generator (current). Approach B = full analys
 
 ## Tech Debt (new, found 2026-07-30)
 
-### [P2] Dashboard shows "Connection Error" when there are zero regions
-**What:** Once ISSUE-003 (WebSocket blank-page bug) was fixed and the dashboard
-actually rendered for the first time in this QA session, a new error surfaced:
-`Dashboard.jsx`'s `fetchDashboardData` throws `TypeError: regionsList.filter is
-not a function`, shown to the user as a "Connection Error — Unable to connect to
-the server" banner. `regionsList` is already defensively derived
-(`data.regions?.results || []`), so this needs a closer look — possibly only
-reproduces with zero `Region` rows (this sandbox's OCHA boundary loader never
-ran, DB has 0 regions) rather than a real production bug. Not investigated
-further — found as a side effect of the ISSUE-003 fix, out of scope for that
-session.
-**Why:** Misleading error message ("check your internet connection") when the
-actual issue is empty/unexpected data shape — bad for a first real login.
-**Context:** Reproduce with regions seeded to confirm whether this is
-data-shape-specific or purely a zero-rows edge case before prioritizing a fix.
-**Effort:** XS-S depending on root cause (CC: 15-45 min)
+### ~~[P2] ISSUE-004: Dashboard shows "Connection Error" on GeoJSON-wrapped API responses~~
+~~Fixed 2026-07-30. Root cause: `/api/v1/geospatial/regions/` (and the stress-event
+/conflict-event summary endpoints) are served by `GeoFeatureModelSerializer`, so
+list data comes back as a GeoJSON `FeatureCollection` ({type, features: [...]})
+with each item's fields nested under `.properties` — not a plain array as
+`Dashboard.jsx` assumed. This wasn't a zero-rows edge case as originally
+suspected — it would reproduce with any amount of region data, since the
+response shape is always GeoJSON-wrapped. Only became visible once ISSUE-003's
+blank-page bug was fixed and the dashboard could render at all. Fixed by adding
+`toFlatFeatureList()` in `Dashboard.jsx` — normalizes either a plain array or a
+FeatureCollection into flat objects, applied at all three call sites (regions,
+recent stress events, recent conflict events). 5 new unit tests. Verified via
+Vite dev server: dashboard now renders full stat cards/charts/activity feed
+instead of crashing. Commit: 5fac612.~~
+
+**New finding surfaced by this fix (not investigated further):** once the
+dashboard rendered end-to-end for the first time, React logged `Maximum update
+depth exceeded` originating from the Dashboard's data-fetch `useEffect`
+(dependency array `[hasPermission]`). `hasPermission` in `AuthContext.jsx` is a
+plain arrow function recreated on every `AuthProvider` render (not wrapped in
+`useCallback`), which is the same "unstable reference in a dependency array"
+pattern as ISSUE-003's WebSocketContext bug. Did not visibly break rendering in
+this session (dashboard displayed correctly despite the warning), but worth
+fixing before it does — see the new tech-debt item below.
+
+### [P2] `hasPermission` (AuthContext) is recreated every render, likely causing an effect re-fire loop
+**What:** `AuthContext.jsx`'s `hasPermission` is a plain `const hasPermission = (permission) => {...}`
+inside `AuthProvider`, not memoized with `useCallback`. `Dashboard.jsx`'s
+data-fetch `useEffect` depends on `[hasPermission]`, so it re-fires (and
+re-fetches) every time `AuthProvider` re-renders, regardless of whether
+anything relevant to auth actually changed. React logs `Maximum update depth
+exceeded` from this during normal dashboard use (found 2026-07-30, while
+verifying the ISSUE-004 fix).
+**Why:** Same shape as the ISSUE-003 WebSocketContext bug (unstable callback
+reference in a dependency array) — worth checking whether other consumers of
+`hasPermission` have the same problem before it causes a visible hang like
+ISSUE-003 did.
+**Context:** Wrap `hasPermission` in `useCallback` in `AuthContext.jsx`; check
+`PermissionRoute` in `App.jsx` and any other `useEffect`/`useMemo` that
+depends on it.
+**Effort:** XS (CC: ~15 min)
 
 ---
 
