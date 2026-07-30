@@ -5,6 +5,27 @@ Approach A = conflict-aware report generator (current). Approach B = full analys
 
 ---
 
+## Tech Debt (new, found 2026-07-30)
+
+### [P2] Dashboard shows "Connection Error" when there are zero regions
+**What:** Once ISSUE-003 (WebSocket blank-page bug) was fixed and the dashboard
+actually rendered for the first time in this QA session, a new error surfaced:
+`Dashboard.jsx`'s `fetchDashboardData` throws `TypeError: regionsList.filter is
+not a function`, shown to the user as a "Connection Error — Unable to connect to
+the server" banner. `regionsList` is already defensively derived
+(`data.regions?.results || []`), so this needs a closer look — possibly only
+reproduces with zero `Region` rows (this sandbox's OCHA boundary loader never
+ran, DB has 0 regions) rather than a real production bug. Not investigated
+further — found as a side effect of the ISSUE-003 fix, out of scope for that
+session.
+**Why:** Misleading error message ("check your internet connection") when the
+actual issue is empty/unexpected data shape — bad for a first real login.
+**Context:** Reproduce with regions seeded to confirm whether this is
+data-shape-specific or purely a zero-rows edge case before prioritizing a fix.
+**Effort:** XS-S depending on root cause (CC: 15-45 min)
+
+---
+
 ## Approach B: Core Features
 
 ### [P1] Road access degradation layer
@@ -58,37 +79,27 @@ to be complete before that happens.
 currently stops after Analyse. Need to implement the Monitor → Start state machine.
 **Effort:** S (human: 1 day / CC: 30 min)
 
-### [P2] Real-time WebSocket alerts
-**What:** Activate the existing `apps/core/` WebSocket consumers for live alert
-delivery when a district risk score crosses a threshold.
-**Why:** Analysts checking a dashboard vs. analysts getting a push alert are different
-product modes. Alerts enable the "embedded in response protocols" vision.
-**Effort:** S (human: 2 days / CC: 30 min — infrastructure exists)
+### ~~[P1] ISSUE-003 (found by /qa on 2026-07-30): WebSocket reconnect storm hangs the app blank immediately after login~~
+~~Fixed 2026-07-30. Root cause was two bugs: (1) `useWebSocket.js`'s `connect`
+callback depended on the whole `options` object WebSocketContext recreated every
+render, causing a teardown/reopen loop on every render — fixed by reading
+onMessage/authToken through refs and depending only on primitive values. (2) the
+backend/infra half — `nginx.conf` had no `location /ws/` block (upgrades fell
+through to the static frontend container), `backend` ran gunicorn+WSGI (can't
+serve Channels regardless of nginx routing), and `asgi.py`'s own comment
+described the correct import order but the code didn't follow it (ORM-touching
+imports ran before `get_asgi_application()`, raising `AppRegistryNotReady` the
+first time anything actually served the ASGI app). Also bumped haproxy's 50s
+timeouts to 1h (would've silently killed idle WS connections) and added
+`AgriSightConsumerTests` (apps/core/tests.py). This also completes the
+"Real-time WebSocket alerts" P2 item below — the infrastructure is now actually
+live, not just present. Verified end-to-end: login shows one clean "WebSocket
+connected" + subscription_success, no reconnect storm, dashboard renders.
+Commits: 2c01532 (frontend), 7fae568 (backend/infra).~~
 
-### [P1] ISSUE-003 (found by /qa on 2026-07-30): WebSocket reconnect storm hangs the
-app blank immediately after login
-**What:** `nginx.conf` has no `location /ws/` block, so `/ws/` falls through to
-`location /` and gets proxied to the static `frontend` container instead of
-`django_backend` — every WebSocket upgrade fails instantly. Separately, `backend`
-runs via `gunicorn ... agrisight.wsgi:application` (WSGI), and Django Channels
-consumers require an ASGI server (daphne/uvicorn) regardless of nginx routing.
-The frontend connects unconditionally on every authenticated page load, and the
-reconnect loop in `useWebSocket.js`/`WebSocketContext.jsx` fires far faster than
-its own coded backoff (`reconnectInterval * attempts`, capped at 5) should allow —
-looks like the provider is being re-mounted/re-triggered on every render rather
-than reconnecting on a clean singleton timer. Net effect: the whole authenticated
-app renders a blank white page after login when accessed via the documented
-HAProxy (`:8080`) → Nginx (`:80`) path. Report: `.gstack/qa-reports/qa-report-agrisight-2026-07-30.md`.
-**Why:** This sharpens the "Real-time WebSocket alerts" item above — it's not just
-an unbuilt feature anymore, the half-wired frontend is actively breaking login for
-anyone not hitting the frontend dev server or `:8000` directly.
-**Context:** Two viable paths — (a) short-term: gate the WebSocket connection
-behind a feature flag until the backend is ASGI-capable, and fix the reconnect
-loop regardless; (b) full activation: add the missing nginx `/ws/` proxy block
-and switch `backend`'s command to `daphne`/`uvicorn` (this is effectively the
-"Real-time WebSocket alerts" P2 item above, promoted to P1 because of user impact).
-**Effort:** XS for the short-term flag/backoff fix (CC: ~30 min) / S for full
-activation (same estimate as the P2 item above, since it's the same work).
+### ~~[P2] Real-time WebSocket alerts~~
+~~Activation completed as part of fixing ISSUE-003 above (2026-07-30) — same
+underlying infrastructure, same commits.~~
 
 ---
 
