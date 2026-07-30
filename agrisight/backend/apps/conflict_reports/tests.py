@@ -252,10 +252,10 @@ class HDXHealthAlertClientTests(TestCase):
 class ConflictReportViewTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            email="analyst@test.com", password="testpass123"
+            username="analyst", email="analyst@test.com", password="testpass123"
         )
         self.other_user = User.objects.create_user(
-            email="other@test.com", password="testpass123"
+            username="other", email="other@test.com", password="testpass123"
         )
         self.client.force_authenticate(user=self.user)
 
@@ -334,7 +334,7 @@ class ConflictReportViewTests(APITestCase):
 
 class FeedbackTests(APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(email="analyst2@test.com", password="testpass")
+        self.user = User.objects.create_user(username="analyst2", email="analyst2@test.com", password="testpass")
         self.report = ConflictReport.objects.create(
             user=self.user,
             district_ids=[1],
