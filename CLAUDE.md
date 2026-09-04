@@ -10,6 +10,7 @@ Key routing rules:
 - Product ideas/brainstorming → invoke /office-hours
 - Strategy/scope → invoke /plan-ceo-review
 - Growth/customer acquisition, GTM, launch strategy, marketing → invoke /growth-playbook
+- Launch video / viral launch on X → invoke /launch-video
 - Architecture → invoke /plan-eng-review
 - Design system/plan review → invoke /design-consultation or /plan-design-review
 - Full review pipeline → invoke /autoplan
