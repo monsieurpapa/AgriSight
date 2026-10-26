@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { alertsAPI } from '../lib/api';
+import { alertsAPI, systemAPI } from '../lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavCounts } from '../hooks/useNavCounts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -41,13 +44,9 @@ const Alerts = () => {
     emailNotifications: true,
     severityFilter: 'all'
   });
-  const [systemHealth, setSystemHealth] = useState({
-    status: 'healthy',
-    uptime: '99.9%',
-    responseTime: '120ms',
-    activeConnections: 45,
-    lastUpdate: new Date().toISOString()
-  });
+  const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
+  const { unreadAlerts } = useNavCounts();
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['alerts'],
@@ -55,18 +54,31 @@ const Alerts = () => {
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
-  // Real-time system health monitoring (UI placeholder)
-  useEffect(() => {
-    const updateSystemHealth = () => {
-      setSystemHealth(prev => ({
-        ...prev,
-        lastUpdate: new Date().toISOString()
-      }));
-    };
+  // Real counts for the overview tiles (these were hard-coded placeholders:
+  // "99.9% uptime", "120ms", "45 connections").
+  const { data: criticalUnread } = useQuery({
+    queryKey: ['alerts', 'critical-unread-count'],
+    queryFn: () => alertsAPI.getAlerts({ severity: 'critical', is_read: 'false' }),
+    refetchInterval: 30000,
+  });
 
-    const interval = setInterval(updateSystemHealth, 10000);
-    return () => clearInterval(interval);
-  }, []);
+  const {
+    data: systemHealth,
+    isLoading: systemHealthLoading,
+    dataUpdatedAt: systemHealthUpdatedAt,
+  } = useQuery({
+    queryKey: ['system', 'health-detailed'],
+    queryFn: () => systemAPI.getDetailedHealth(),
+    enabled: isAdmin(),
+    refetchInterval: 60000,
+  });
+
+  // After marking alerts read, refresh the sidebar/bell counts and every
+  // ['alerts', ...] query (list + critical-unread tile).
+  const refreshAlertCounts = () => {
+    queryClient.invalidateQueries({ queryKey: ['nav'] });
+    queryClient.invalidateQueries({ queryKey: ['alerts'] });
+  };
 
   // Handle real-time notifications
   useEffect(() => {
@@ -82,7 +94,7 @@ const Alerts = () => {
   const handleMarkAsRead = async (alertId) => {
     try {
       await alertsAPI.markAlertAsRead(alertId);
-      refetch();
+      refreshAlertCounts();
     } catch (err) {
       console.error('Failed to mark alert as read:', err);
     }
@@ -91,7 +103,7 @@ const Alerts = () => {
   const handleMarkAllRead = async () => {
     try {
       await alertsAPI.markAllAlertsAsRead();
-      refetch();
+      refreshAlertCounts();
     } catch (err) {
       console.error('Failed to mark all alerts as read:', err);
     }
@@ -172,19 +184,17 @@ const Alerts = () => {
         </div>
       </div>
 
-      {/* System Health Overview */}
+      {/* Alert overview — all values come from the API */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">System Status</p>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {systemHealth.status === 'healthy' ? 'Healthy' : 'Warning'}
-                </p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Unread Alerts</p>
+                <p className="text-2xl font-bold font-mono text-gray-900 dark:text-white">{unreadAlerts ?? '—'}</p>
               </div>
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-                <Shield className="h-5 w-5 text-green-600" />
+              <div className="w-10 h-10 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
+                <Bell className="h-5 w-5 text-red-600" />
               </div>
             </div>
           </CardContent>
@@ -194,8 +204,22 @@ const Alerts = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Uptime</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{systemHealth.uptime}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Critical, Unread</p>
+                <p className="text-2xl font-bold font-mono text-gray-900 dark:text-white">{criticalUnread?.count ?? '—'}</p>
+              </div>
+              <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/20 rounded-lg flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Alerts</p>
+                <p className="text-2xl font-bold font-mono text-gray-900 dark:text-white">{data?.count ?? '—'}</p>
               </div>
               <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
                 <Clock className="h-5 w-5 text-blue-600" />
@@ -208,25 +232,13 @@ const Alerts = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Response Time</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{systemHealth.responseTime}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Real-time Feed</p>
+                <p className={`text-2xl font-bold ${isConnected ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+                  {isConnected ? 'Connected' : 'Offline'}
+                </p>
               </div>
-              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
-                <Zap className="h-5 w-5 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Connections</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{systemHealth.activeConnections}</p>
-              </div>
-              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center">
-                <Activity className="h-5 w-5 text-orange-600" />
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+                <Activity className="h-5 w-5 text-green-600" />
               </div>
             </div>
           </CardContent>
@@ -421,32 +433,31 @@ const Alerts = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle>Performance Metrics</CardTitle>
+                <CardTitle>Service Health</CardTitle>
+                <CardDescription>Live checks from /api/health/detailed/</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">CPU Usage</span>
-                  <span className="text-sm font-medium">23%</span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div className="bg-green-500 h-2 rounded-full" style={{ width: '23%' }}></div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Memory Usage</span>
-                  <span className="text-sm font-medium">67%</span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div className="bg-yellow-500 h-2 rounded-full" style={{ width: '67%' }}></div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Disk Usage</span>
-                  <span className="text-sm font-medium">45%</span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: '45%' }}></div>
-                </div>
+                {!isAdmin() ? (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Service health is visible to administrators only.
+                  </p>
+                ) : systemHealthLoading ? (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Checking services…</p>
+                ) : systemHealth?.services ? (
+                  <>
+                    {Object.entries(systemHealth.services).map(([service, state]) => (
+                      <div key={service} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">{service}</span>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${state === 'healthy' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <span className="text-sm font-medium">{state === 'healthy' ? 'Healthy' : 'Unhealthy'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <p className="text-sm text-red-600">Could not reach the health endpoint.</p>
+                )}
               </CardContent>
             </Card>
 
@@ -463,20 +474,19 @@ const Alerts = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">API Response Time</span>
-                  <span className="text-sm font-medium">{systemHealth.responseTime}</span>
-                </div>
+                {isAdmin() && systemHealth?.latencyMs != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Health Check Round Trip</span>
+                    <span className="text-sm font-medium font-mono">{systemHealth.latencyMs} ms</span>
+                  </div>
+                )}
 
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Active Users</span>
-                  <span className="text-sm font-medium">{systemHealth.activeConnections}</span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Last Update</span>
-                  <span className="text-sm font-medium">{formatRelativeTime(systemHealth.lastUpdate)}</span>
-                </div>
+                {isAdmin() && systemHealthUpdatedAt > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Last Checked</span>
+                    <span className="text-sm font-medium font-mono">{formatRelativeTime(new Date(systemHealthUpdatedAt).toISOString())}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

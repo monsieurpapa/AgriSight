@@ -392,7 +392,9 @@ class HealthCheckMiddleware(MiddlewareMixin):
     def _check_celery(self):
         """Check Celery connectivity."""
         try:
-            current_app.control.inspect().stats()
-            return 'healthy'
+            # stats() returns None/{} when no worker replies; only a reply
+            # from at least one worker means Celery can process tasks.
+            stats = current_app.control.inspect(timeout=1.0).stats()
+            return 'healthy' if stats else 'unhealthy'
         except Exception:
             return 'unhealthy'

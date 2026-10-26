@@ -235,7 +235,7 @@ class HealthCheckMiddlewareTest(TestCase):
         mock_db.ensure_connection.return_value = None
         mock_cache.set.return_value = True
         mock_cache.get.return_value = 'ok'
-        mock_celery.control.inspect.return_value.stats.return_value = {}
+        mock_celery.control.inspect.return_value.stats.return_value = {'celery@worker1': {'pid': 1}}
         
         request = self.factory.get('/health/detailed/')
         
@@ -258,7 +258,7 @@ class HealthCheckMiddlewareTest(TestCase):
         mock_db.ensure_connection.side_effect = Exception('Database error')
         mock_cache.set.return_value = True
         mock_cache.get.return_value = 'ok'
-        mock_celery.control.inspect.return_value.stats.return_value = {}
+        mock_celery.control.inspect.return_value.stats.return_value = {'celery@worker1': {'pid': 1}}
         
         request = self.factory.get('/health/detailed/')
         
@@ -268,6 +268,38 @@ class HealthCheckMiddlewareTest(TestCase):
         data = json.loads(response.content)
         self.assertEqual(data['status'], 'unhealthy')
         self.assertEqual(data['services']['database'], 'unhealthy')
+
+
+class CeleryHealthRegressionTests(TestCase):
+    """
+    Regression: inspect().stats() returns None (or {}) when no Celery worker
+    replies, and the health checks reported that as 'healthy'. The Alerts >
+    System Monitoring tab showed Celery healthy with no worker running.
+    Report: docs/qa/qa-report-2026-10-26.md (P1 #10)
+    """
+
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_user(
+            username='celery-admin', email='celery-admin@example.com', password='x', user_type='admin')
+
+    @patch('apps.core.views.cache')
+    @patch('apps.core.views.connection')
+    @patch('apps.core.views.current_app')
+    def test_no_workers_is_unhealthy(self, mock_celery, mock_connection, mock_cache):
+        mock_cache.get.return_value = 'ok'
+        for no_reply in (None, {}):
+            mock_celery.control.inspect.return_value.stats.return_value = no_reply
+            self.client.force_login(self.admin)
+            response = self.client.get('/api/health/detailed/')
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()['services']['celery'], 'unhealthy')
+
+    @patch('apps.core.middleware.current_app')
+    def test_middleware_no_workers_is_unhealthy(self, mock_celery):
+        mock_celery.control.inspect.return_value.stats.return_value = None
+        middleware = HealthCheckMiddleware(get_response=lambda req: HttpResponse())
+        self.assertEqual(middleware._check_celery(), 'unhealthy')
 
 
 class HealthCheckViewTest(TestCase):
@@ -310,7 +342,7 @@ class HealthCheckViewTest(TestCase):
         mock_connection.cursor.return_value.__enter__.return_value.execute.return_value = None
         mock_cache.set.return_value = True
         mock_cache.get.return_value = 'ok'
-        mock_celery.control.inspect.return_value.stats.return_value = {}
+        mock_celery.control.inspect.return_value.stats.return_value = {'celery@worker1': {'pid': 1}}
 
         self.client.force_login(self.user)
         forbidden = self.client.get('/api/health/detailed/')

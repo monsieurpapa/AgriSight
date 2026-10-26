@@ -84,8 +84,11 @@ def health_check_detailed(request):
         services['redis'] = 'unhealthy'
 
     try:
-        current_app.control.inspect().stats()
-        services['celery'] = 'healthy'
+        # stats() returns None/{} when no worker replies — that is not healthy.
+        stats = current_app.control.inspect(timeout=1.0).stats()
+        services['celery'] = 'healthy' if stats else 'unhealthy'
+        if not stats:
+            logger.warning("Celery health check: no workers responded")
     except Exception as exc:
         logger.error(f"Celery health check failed: {exc}")
         services['celery'] = 'unhealthy'

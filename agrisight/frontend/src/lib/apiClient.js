@@ -97,6 +97,7 @@ export const MAX_RETRIES = 3;
 const MAX_RETRY_DELAY_MS = 8000;
 
 export const shouldRetryRequest = (config, status, attempt) =>
+  !config?.noRetry &&
   SAFE_METHODS.includes((config?.method || 'get').toLowerCase()) &&
   RETRYABLE_STATUSES.includes(status) &&
   attempt < MAX_RETRIES;
