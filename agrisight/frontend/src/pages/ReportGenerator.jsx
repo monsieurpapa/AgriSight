@@ -4,6 +4,7 @@ import { conflictReportsAPI, geospatialAPI } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { FileText, Download, RefreshCcw, AlertTriangle } from 'lucide-react';
+import { listFromResponse } from '../lib/geojson';
 
 const PHASE_COLORS = {
   'Phase 1': 'bg-green-100 text-green-800',
@@ -46,7 +47,7 @@ export default function ReportGenerator() {
     queryFn: () => conflictReportsAPI.list(),
   });
 
-  const districts = (regionsData?.results || []).filter(
+  const districts = listFromResponse(regionsData).filter(
     (r) => ['North Kivu', 'Sud-Kivu', 'Ituri'].includes(r.province)
   );
 

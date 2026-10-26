@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 import { analyticsAPI } from '../lib/api';
 import { formatDate, formatRelativeTime } from '../lib/utils';
+import { listFromResponse } from '../lib/geojson';
 
 const StressEvents = () => {
   const [events, setEvents] = useState([]);
@@ -32,7 +33,7 @@ const StressEvents = () => {
         setLoading(true);
         setError(null);
         const data = await analyticsAPI.getStressEvents({ limit: 100 });
-        const results = data?.results || data?.features || data || [];
+        const results = listFromResponse(data);
         const normalized = results.map((event) => {
           const source = event?.properties ? event.properties : event;
           return {

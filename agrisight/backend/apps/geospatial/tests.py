@@ -146,3 +146,27 @@ class RegionAccessTests(TestCase):
         self.assertEqual(data['regions']['total'], 1)
         self.assertEqual(data['satellite_images']['total'], 1)
         self.assertEqual(data['vegetation_indices']['total'], 1)
+
+
+class RegionGeoJSONRegressionTests(TestCase):
+    """
+    Regression: 'rest_framework_gis' was missing from INSTALLED_APPS, so the
+    regions endpoint returned geometry as an EWKT string
+    ("SRID=4326;MULTIPOLYGON(...)") that Leaflet cannot draw.
+    Report: .gstack/qa-reports/qa-report-agrisight-2026-10-26.md (P0 #5)
+    """
+
+    def test_region_geometry_is_geojson(self):
+        from django.contrib.gis.geos import MultiPolygon, Polygon
+        from apps.geospatial.models import Region
+        from apps.geospatial.serializers import RegionSerializer
+
+        region = Region.objects.create(
+            name="Rutshuru", code="CD6105", country="DRC", province="Nord-Kivu",
+            geometry=MultiPolygon(Polygon(((29.2, -1.4), (29.6, -1.4), (29.6, -0.9), (29.2, -0.9), (29.2, -1.4))), srid=4326),
+        )
+        feature = RegionSerializer(region).data
+        self.assertEqual(feature["type"], "Feature")
+        self.assertIsInstance(feature["geometry"], dict)
+        self.assertEqual(feature["geometry"]["type"], "MultiPolygon")
+        self.assertEqual(feature["geometry"]["coordinates"][0][0][0], [29.2, -1.4])

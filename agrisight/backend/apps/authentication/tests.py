@@ -128,3 +128,48 @@ class AuthenticationFlowTests(TestCase):
         payload = {"old_password": "StrongPass123", "new_password1": "ChangedPass123", "new_password2": "ChangedPass123"}
         resp = self.client.post(self.change_password_url, payload, format="json")
         self.assertEqual(resp.status_code, 200)
+
+
+class RegistrationUsernameRegressionTests(TestCase):
+    """
+    Regression: login is e-mail based, so allauth never set ``username`` and the
+    first sign-up was saved with username=''. Every later sign-up then failed
+    with a 500 (unique constraint on users_user.username).
+    Report: .gstack/qa-reports/qa-report-agrisight-2026-10-26.md (P0 #2)
+    """
+
+    register_url = "/api/auth/registration/"
+
+    def _register(self, email):
+        return APIClient().post(self.register_url, {
+            "email": email,
+            "password1": "Kivu#Harvest2026",
+            "password2": "Kivu#Harvest2026",
+            "first_name": "Neema",
+            "last_name": "Furaha",
+            "user_type": "cooperative",
+            "phone_number": "",
+        }, format="json")
+
+    def test_multiple_signups_succeed_with_unique_usernames(self):
+        for email in ("amani@example.com", "neema@example.org", "bahati@example.net"):
+            resp = self._register(email)
+            self.assertIn(resp.status_code, (200, 201), resp.content)
+        usernames = list(User.objects.values_list("username", flat=True))
+        self.assertEqual(len(usernames), 3)
+        self.assertNotIn("", usernames)
+        self.assertEqual(len(set(usernames)), 3)
+
+    def test_same_local_part_gets_distinct_username(self):
+        self.assertIn(self._register("amani@ngo-one.org").status_code, (200, 201))
+        self.assertIn(self._register("amani@ngo-two.org").status_code, (200, 201))
+        u1, u2 = User.objects.order_by("id").values_list("username", flat=True)
+        self.assertEqual(u1, "amani")
+        self.assertTrue(u2.startswith("amani_") and u2 != u1)
+
+    def test_username_unaffected_by_soft_deleted_user(self):
+        old = User.objects.create_user(username="amani", email="old@example.com", password="x", user_type="researcher")
+        if hasattr(old, "deleted_at"):
+            from django.utils import timezone
+            User.all_objects.filter(pk=old.pk).update(deleted_at=timezone.now())
+        self.assertIn(self._register("amani@example.com").status_code, (200, 201))
