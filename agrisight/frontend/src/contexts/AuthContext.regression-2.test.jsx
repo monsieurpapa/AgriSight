@@ -1,7 +1,8 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import { AuthProvider, useAuth, isTransientAuthError } from './AuthContext';
+import { AuthProvider, useAuth } from './AuthContext';
+import { isTransientAuthError } from '../lib/authRetry';
 import { authAPI } from '../lib/authAPI';
 
 // Regression: a 429 (or 5xx / network error) from /api/auth/user/ during the
