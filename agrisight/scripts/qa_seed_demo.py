@@ -6,7 +6,8 @@ Creates admin@agrisight.test / field@agrisight.test (password AgriTest#2026), bo
 import datetime as dt
 from django.contrib.gis.geos import Polygon, MultiPolygon, Point
 from apps.organizations.models import Organization
-from apps.geospatial.models import Region, RegionAccess
+from apps.geospatial.models import Region, RegionAccess, SatelliteImage, VegetationIndex
+from django.utils import timezone
 from apps.analytics.models import AgriculturalStressEvent, ConflictEvent
 from apps.reports_alerts.models import Alert
 from apps.users.models import User
@@ -47,4 +48,20 @@ for i, r in enumerate(regions):
         alert_type="stress", severity="critical", message="Seeded alert for QA", related_stress_event=ev))
     if created:
         a.regions.add(r)
-print("seeded", Region.objects.count(), "regions,", AgriculturalStressEvent.objects.count(), "stress events,", Alert.objects.count(), "alerts")
+# A few processed Sentinel-2 scenes with NDVI/EVI so the dashboard trend and
+# region rows have real values (one region is left without imagery on purpose).
+for r_idx, r in enumerate(regions[:2]):
+    for d_idx, days_ago in enumerate((25, 15, 5)):
+        acquired = timezone.now() - dt.timedelta(days=days_ago)
+        img, created = SatelliteImage.objects.get_or_create(
+            region=r, acquisition_date__date=acquired.date(), defaults=dict(
+                acquisition_date=acquired, satellite_name="Sentinel-2", cloud_cover_percentage=8.0,
+                resolution_meters=10, bands_available=["B04", "B08"], image_path="qa/seed.tif", is_processed=True))
+        if created:
+            ndvi = 0.68 - 0.06 * d_idx - 0.05 * r_idx
+            VegetationIndex.objects.create(satellite_image=img, index_type="NDVI", mean_value=ndvi,
+                                           min_value=ndvi - 0.2, max_value=ndvi + 0.15, std_deviation=0.08, raster_path="qa/ndvi.tif")
+            VegetationIndex.objects.create(satellite_image=img, index_type="EVI", mean_value=ndvi * 0.7,
+                                           min_value=0.1, max_value=0.7, std_deviation=0.06, raster_path="qa/evi.tif")
+
+print("seeded", Region.objects.count(), "regions,", VegetationIndex.objects.count(), "vegetation indices,", AgriculturalStressEvent.objects.count(), "stress events,", Alert.objects.count(), "alerts")
