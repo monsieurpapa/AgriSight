@@ -27,7 +27,7 @@ const API_BASE_URL = resolveBaseUrl();
 console.log('API Client - Resolved API_BASE_URL:', API_BASE_URL);
 
 // Create axios instance with default configuration
-const http = axios.create({
+export const http = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,  // Enable cookies for session authentication
   timeout: 30000, // 30 second timeout
@@ -38,6 +38,16 @@ const http = axios.create({
 
 // CSRF token handling for session authentication
 let csrfToken = null;
+
+const SAFE_METHODS = ['get', 'head', 'options'];
+
+// Django sets the `csrftoken` cookie (and rotates it on login). Cookies are
+// not port-scoped, so the SPA can read it in dev (5173 -> 8000) and prod.
+export const readCsrfCookie = () => {
+  if (typeof document === 'undefined' || !document.cookie) return null;
+  const match = document.cookie.split(';').map((c) => c.trim()).find((c) => c.startsWith('csrftoken='));
+  return match ? decodeURIComponent(match.slice('csrftoken='.length)) : null;
+};
 
 const getCsrfToken = async () => {
   if (!csrfToken) {
@@ -53,21 +63,51 @@ const getCsrfToken = async () => {
 
 // Request interceptor
 http.interceptors.request.use(
-  (config) => {
-    // Add CSRF token to non-GET requests
-    if (config.method !== 'get' && !config.url.includes('/csrf/') && csrfToken) {
-      config.headers['X-CSRFToken'] = csrfToken;
+  async (config) => {
+    const method = (config.method || 'get').toLowerCase();
+    // Add CSRF token to unsafe requests. Previously the token lived only in
+    // memory, so the first write after any full page load went out without
+    // it and was rejected with 403 "CSRF token missing". Prefer the cookie
+    // (always current, survives reloads and the rotation on login), then the
+    // cached value, then fetch one.
+    if (!SAFE_METHODS.includes(method) && !(config.url || '').includes('/csrf/')) {
+      const token = readCsrfCookie() || csrfToken || (await getCsrfToken());
+      if (token) {
+        config.headers['X-CSRFToken'] = token;
+      }
     }
-    
+
     // Add request timestamp for debugging
     config.metadata = { startTime: new Date() };
-    
+
     return config;
   },
   (error) => {
     return Promise.reject(createAPIError(error, 'REQUEST_ERROR'));
   }
 );
+
+// Only idempotent requests are retried automatically. Retrying a POST/PUT/
+// PATCH/DELETE after a 5xx can apply the write twice (registration was sent
+// 4x when the server returned 500).
+// 500 is excluded: it is usually a deterministic server bug, and retrying only
+// delays the error the user needs to see.
+export const RETRYABLE_STATUSES = [408, 429, 502, 503, 504];
+export const MAX_RETRIES = 3;
+const MAX_RETRY_DELAY_MS = 8000;
+
+export const shouldRetryRequest = (config, status, attempt) =>
+  SAFE_METHODS.includes((config?.method || 'get').toLowerCase()) &&
+  RETRYABLE_STATUSES.includes(status) &&
+  attempt < MAX_RETRIES;
+
+export const retryDelayMs = (attempt, retryAfterHeader) => {
+  const retryAfterSeconds = Number(retryAfterHeader);
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return Math.min(retryAfterSeconds * 1000, MAX_RETRY_DELAY_MS);
+  }
+  return Math.min(Math.pow(2, attempt) * 1000, MAX_RETRY_DELAY_MS);
+};
 
 // Response interceptor with comprehensive error handling and retry logic
 http.interceptors.response.use(
@@ -83,13 +123,13 @@ http.interceptors.response.use(
     const apiError = createAPIError(error);
     const originalRequest = error.config;
 
+    if (!originalRequest) {
+      return Promise.reject(apiError);
+    }
+
     // Initialize retry metadata if not present
     if (!originalRequest._retryMetadata) {
-      originalRequest._retryMetadata = {
-        count: 0,
-        maxRetries: 3, // Maximum retry attempts
-        retryableStatuses: [408, 429, 500, 502, 503, 504], // Retry on these statuses
-      };
+      originalRequest._retryMetadata = { count: 0 };
     }
 
     // Handle CSRF token refresh on 403 responses
@@ -100,7 +140,7 @@ http.interceptors.response.use(
       if (!originalRequest._csrfRetry) {
         originalRequest._csrfRetry = true;
         csrfToken = null;
-        const token = await getCsrfToken();
+        const token = (await getCsrfToken()) || readCsrfCookie();
         if (token) {
           originalRequest.headers['X-CSRFToken'] = token;
           return http(originalRequest);
@@ -108,18 +148,13 @@ http.interceptors.response.use(
       }
     }
 
-    // Handle retryable errors with exponential backoff
-    const shouldRetry =
-      originalRequest._retryMetadata.retryableStatuses.includes(error.response?.status) &&
-      originalRequest._retryMetadata.count < originalRequest._retryMetadata.maxRetries &&
-      originalRequest.method !== 'get'; // Don't retry GET requests automatically (idempotent)
-
-    if (shouldRetry) {
+    // Retry idempotent requests on transient failures with exponential backoff
+    if (shouldRetryRequest(originalRequest, error.response?.status, originalRequest._retryMetadata.count)) {
+      const retryDelay = retryDelayMs(originalRequest._retryMetadata.count, error.response?.headers?.['retry-after']);
       originalRequest._retryMetadata.count += 1;
-      const retryDelay = Math.pow(2, originalRequest._retryMetadata.count - 1) * 1000; // Exponential backoff
-      
+
       console.warn(
-        `🔄 Retrying request (attempt ${originalRequest._retryMetadata.count}/${originalRequest._retryMetadata.maxRetries}) after ${retryDelay}ms`
+        `🔄 Retrying ${originalRequest.method?.toUpperCase()} ${originalRequest.url} (attempt ${originalRequest._retryMetadata.count}/${MAX_RETRIES}) after ${retryDelay}ms`
       );
 
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
