@@ -48,6 +48,7 @@ import {
   formatArea
 } from '../lib/utils';
 import { toFlatFeatureList } from '../lib/geojson';
+import { buildRegionStatus, buildTopRegions, buildVegetationTrends, worstStressByRegion } from '../lib/dashboardData';
 
 // Several endpoints backed by GeoDjango models (regions, stress events, conflict
 // events) are served by a GeoFeatureModelSerializer, so their list data comes
@@ -96,7 +97,8 @@ const Dashboard = () => {
         const transformedData = {
           stats: {
             totalRegions: regionsCount,
-            activeRegions: regionsList.filter(r => r.is_active).length || 0,
+            // Regions with at least one stress event in the summary window
+            regionsWithRecentStress: worstStressByRegion(recentStressEvents).size,
             totalArea: regionsList.reduce((sum, r) => sum + (r.area_hectares || 0), 0) / 100 || 0, // Convert to km²
             lastUpdate: data.lastUpdate,
             processingTasks: data.processingStats?.active_tasks || 0,
@@ -110,7 +112,7 @@ const Dashboard = () => {
               id: `stress-${event.id}`,
               type: 'alert',
               title: 'Agricultural stress detected',
-              description: `${event.stress_type} stress in ${event.region?.name || 'Unknown region'}`,
+              description: `${event.stress_type} stress in ${event.region_name || event.region?.name || 'Unknown region'}`,
               timestamp: event.detection_date,
               status: event.severity === 'high' ? 'warning' : 'completed'
             })),
@@ -119,76 +121,38 @@ const Dashboard = () => {
               id: `conflict-${event.id}`,
               type: 'alert',
               title: 'Conflict event reported',
-              description: `${event.event_type} in ${event.region?.name || 'Unknown region'}`,
+              description: `${event.event_type} in ${event.region_name || event.region?.name || 'Unknown region'}`,
               timestamp: event.event_date,
               status: 'warning'
             })),
-            // Processing activity
-            {
-              id: 'processing-1',
-              type: 'processing',
-              title: 'Satellite data processing',
-              description: `${data.processingStats?.total_images_processed || 0} images processed`,
-              timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-              status: 'completed'
-            }
           ],
-          vegetationTrends: [], // Will be populated by vegetation data API
-          regionStatus: [
-            { name: 'Healthy', value: data.stressSummary?.events_by_severity?.low || 0, color: '#10b981' },
-            { name: 'Moderate', value: data.stressSummary?.events_by_severity?.medium || 0, color: '#f59e0b' },
-            { name: 'Stressed', value: data.stressSummary?.events_by_severity?.high || 0, color: '#ef4444' },
-            { name: 'No Data', value: Math.max(0, regionsCount - (data.stressSummary?.total_events || 0)), color: '#6b7280' }
-          ],
-          topRegions: regionsList.slice(0, 5).map(region => ({
-            name: region.name,
-            ndvi: 0.5, // Will be updated with real vegetation data
-            area: region.area_hectares / 100, // Convert to km²
-            status: 'healthy', // Will be determined by stress events
-            change: 0 // Will be calculated from trend data
-          })) || []
+          vegetationTrends: [],
+          // Each region counted once, by its worst stress event in the window
+          regionStatus: buildRegionStatus(regionsList, recentStressEvents),
+          topRegions: buildTopRegions(regionsList.slice(0, 5), {}, recentStressEvents),
         };
 
-        // Fetch vegetation trend data for the first few regions
-        if (regionsList.length > 0) {
-          try {
-            const vegetationPromises = regionsList.slice(0, 3).map(region => 
+        // Fetch vegetation data for the regions shown in "Region Performance"
+        const shownRegions = regionsList.slice(0, 5);
+        if (shownRegions.length > 0) {
+          const results = await Promise.allSettled(
+            shownRegions.map(region =>
               satelliteProcessingAPI.getRegionVegetationData(region.id, { days: 30 })
-            );
-            const vegetationData = await Promise.all(vegetationPromises);
-            
-            // Process vegetation data into trend format
-            const trendData = {};
-            vegetationData.forEach((regionData, index) => {
-              if (regionData && regionData.length > 0) {
-                regionData.forEach(point => {
-                  const date = point.date;
-                  if (!trendData[date]) {
-                    trendData[date] = { date, ndvi: 0, evi: 0, ndwi: 0, savi: 0, count: 0 };
-                  }
-                  if (point.index_type === 'NDVI') trendData[date].ndvi += point.mean_value;
-                  if (point.index_type === 'EVI') trendData[date].evi += point.mean_value;
-                  if (point.index_type === 'NDWI') trendData[date].ndwi += point.mean_value;
-                  if (point.index_type === 'SAVI') trendData[date].savi += point.mean_value;
-                  trendData[date].count += 1;
-                });
-              }
-            });
-            
-            // Average the values and convert to array
-            transformedData.vegetationTrends = Object.values(trendData)
-              .map(point => ({
-                date: point.date,
-                ndvi: point.count > 0 ? point.ndvi / point.count : 0,
-                evi: point.count > 0 ? point.evi / point.count : 0,
-                ndwi: point.count > 0 ? point.ndwi / point.count : 0,
-                savi: point.count > 0 ? point.savi / point.count : 0
-              }))
-              .sort((a, b) => new Date(a.date) - new Date(b.date));
-          } catch (vegetationError) {
-            console.warn('Failed to fetch vegetation data:', vegetationError);
-            setWarnings(prev => (prev || []).concat([{ error: vegetationError }]));
+            )
+          );
+          const vegetationByRegionId = {};
+          results.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+              vegetationByRegionId[shownRegions[index].id] = result.value;
+            }
+          });
+          const failures = results.filter(r => r.status === 'rejected');
+          if (failures.length > 0) {
+            console.warn('Failed to fetch vegetation data:', failures[0].reason);
+            setWarnings(prev => (prev || []).concat([{ error: failures[0].reason }]));
           }
+          transformedData.vegetationTrends = buildVegetationTrends(Object.values(vegetationByRegionId));
+          transformedData.topRegions = buildTopRegions(shownRegions, vegetationByRegionId, recentStressEvents);
         }
 
         setDashboardData(transformedData);
@@ -368,8 +332,8 @@ const Dashboard = () => {
                 <p className="text-3xl font-bold text-gray-900 dark:text-white">
                   {stats.totalRegions}
                 </p>
-                <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                  {stats.activeRegions} active
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <span className="font-mono">{stats.regionsWithRecentStress}</span> with recent stress
                 </p>
               </div>
               <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
@@ -668,24 +632,28 @@ const Dashboard = () => {
                         </h4>
                         <Badge 
                           variant="outline"
-                          className={getVegetationIndexColor(region.ndvi, 'NDVI')}
+                          className={region.ndvi != null ? getVegetationIndexColor(region.ndvi, 'NDVI') : 'text-gray-500'}
                         >
-                          {getVegetationIndexLabel(region.ndvi, 'NDVI')}
+                          {region.ndvi != null ? getVegetationIndexLabel(region.ndvi, 'NDVI') : 'No NDVI data'}
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-                        <span>NDVI: {formatVegetationIndex(region.ndvi)}</span>
-                        <span>{formatArea(region.area)}</span>
-                        <div className="flex items-center">
-                          {region.change > 0 ? (
-                            <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                          ) : (
-                            <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
-                          )}
-                          <span className={region.change > 0 ? 'text-green-600' : 'text-red-600'}>
-                            {region.change > 0 ? '+' : ''}{formatVegetationIndex(region.change)}
-                          </span>
-                        </div>
+                        <span className="font-mono">NDVI: {formatVegetationIndex(region.ndvi)}</span>
+                        <span className="font-mono">{formatArea(region.area)}</span>
+                        {region.change != null ? (
+                          <div className="flex items-center font-mono">
+                            {region.change >= 0 ? (
+                              <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                            ) : (
+                              <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                            )}
+                            <span className={region.change >= 0 ? 'text-green-600' : 'text-red-600'}>
+                              {region.change > 0 ? '+' : ''}{formatVegetationIndex(region.change)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
                       </div>
                     </div>
                   </div>

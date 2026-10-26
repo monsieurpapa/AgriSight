@@ -10,6 +10,7 @@ import { geospatialAPI, analyticsAPI, satelliteProcessingAPI } from '../lib/api'
 import { formatDate, formatVegetationIndex, getVegetationIndexColor, getVegetationIndexLabel } from '../lib/utils';
 import 'leaflet/dist/leaflet.css';
 import { listFromResponse, geometryLatLngs, geometryCenter, regionIdOf } from '../lib/geojson';
+import { vegetationSeries } from '../lib/dashboardData';
 
 // Component to update map bounds when regions change
 const MapBoundsUpdater = ({ regions }) => {
@@ -86,7 +87,8 @@ const MapView = () => {
 
       try {
         const data = await satelliteProcessingAPI.getRegionVegetationData(selectedRegion.id, { days: 30 });
-        setVegetationData(data);
+        // The endpoint returns { vegetation_data: [...], summary_statistics, ... }
+        setVegetationData(vegetationSeries(data));
       } catch (err) {
         console.warn('Failed to fetch vegetation data:', err);
         setVegetationData(null);
@@ -143,7 +145,7 @@ const MapView = () => {
     const indexData = vegetationData.filter(item => item.index_type === indexType);
     if (indexData.length === 0) return null;
 
-    return indexData.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    return [...indexData].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
   };
   if (loading) {
     return (
