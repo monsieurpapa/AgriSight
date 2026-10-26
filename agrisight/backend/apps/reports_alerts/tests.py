@@ -158,6 +158,7 @@ class DownloadReportRegressionTests(TestCase):
             contact_email="reg@example.com",
         )
         self.user = User.objects.create_user(
+            username="reguser",
             email="reguser@example.com",
             password="StrongPass123",
             user_type="humanitarian",
