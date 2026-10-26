@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button';
 import { Download, FileDown, ImageDown } from 'lucide-react';
 import { geospatialAPI } from '../lib/api';
+import { listFromResponse, featureCollectionFromResponse } from '../lib/geojson';
 
 const Exports = () => {
   const [selectedRegion, setSelectedRegion] = useState('all');
@@ -18,7 +19,7 @@ const Exports = () => {
     queryFn: () => geospatialAPI.getDataQualitySummary()
   });
 
-  const regions = regionsData?.results || regionsData?.features || regionsData || [];
+  const regions = listFromResponse(regionsData);
 
   const regionOptions = useMemo(() => {
     return regions.map((region) => {
@@ -87,32 +88,7 @@ const Exports = () => {
 
   const handleGeoJsonExport = async () => {
     const response = await geospatialAPI.getRegions();
-    if (response?.type === 'FeatureCollection') {
-      downloadBlob(new Blob([JSON.stringify(response)], { type: 'application/json' }), 'regions.geojson');
-      return;
-    }
-
-    const features = response?.results || response?.features || response || [];
-    const geojson = {
-      type: 'FeatureCollection',
-      features: features.map((feature) => {
-        if (feature?.type === 'Feature') {
-          return feature;
-        }
-        return {
-          type: 'Feature',
-          geometry: feature.geometry || null,
-          properties: {
-            id: feature.id,
-            name: feature.name,
-            country: feature.country,
-            province: feature.province,
-            area_hectares: feature.area_hectares
-          }
-        };
-      })
-    };
-
+    const geojson = featureCollectionFromResponse(response);
     downloadBlob(new Blob([JSON.stringify(geojson)], { type: 'application/json' }), 'regions.geojson');
   };
 

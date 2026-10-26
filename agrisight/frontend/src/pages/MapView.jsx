@@ -9,6 +9,7 @@ import { MapPin, Layers, Satellite, Ruler, Download, AlertTriangle, Activity, Ey
 import { geospatialAPI, analyticsAPI, satelliteProcessingAPI } from '../lib/api';
 import { formatDate, formatVegetationIndex, getVegetationIndexColor, getVegetationIndexLabel } from '../lib/utils';
 import 'leaflet/dist/leaflet.css';
+import { listFromResponse, geometryLatLngs, geometryCenter, regionIdOf } from '../lib/geojson';
 
 // Component to update map bounds when regions change
 const MapBoundsUpdater = ({ regions }) => {
@@ -16,14 +17,8 @@ const MapBoundsUpdater = ({ regions }) => {
 
   useEffect(() => {
     if (regions && regions.length > 0) {
-      const bounds = regions
-        .filter(region => region.geometry)
-        .map(region => {
-          // Convert GeoJSON geometry to Leaflet bounds
-          const coords = region.geometry.coordinates[0];
-          return coords.map(coord => [coord[1], coord[0]]); // Leaflet expects [lat, lng]
-        })
-        .flat();
+      // Works for Polygon and MultiPolygon (regions are MultiPolygons)
+      const bounds = regions.flatMap(region => geometryLatLngs(region.geometry));
 
       if (bounds.length > 0) {
         map.fitBounds(bounds, { padding: [20, 20] });
@@ -64,12 +59,14 @@ const MapView = () => {
           analyticsAPI.getStressEvents({ limit: 100 })
         ]);
 
-        setRegions(regionsData.results || []);
-        setStressEvents(stressData.results || []);
+        // Both endpoints return GeoJSON FeatureCollections inside `results`
+        const regionList = listFromResponse(regionsData);
+        setRegions(regionList);
+        setStressEvents(listFromResponse(stressData));
 
         // Set first region as selected by default
-        if (regionsData.results && regionsData.results.length > 0) {
-          setSelectedRegion(regionsData.results[0]);
+        if (regionList.length > 0) {
+          setSelectedRegion(regionList[0]);
         }
       } catch (err) {
         console.error('Failed to fetch map data:', err);
@@ -126,7 +123,7 @@ const MapView = () => {
   // Get region style based on stress events
   const getRegionStyle = (region) => {
     const layerOpacity = getLayerOpacity();
-    const regionStressEvents = stressEvents.filter(event => event.region?.id === region.id);
+    const regionStressEvents = stressEvents.filter(event => regionIdOf(event) === region.id);
     const hasHighStress = regionStressEvents.some(event => getSeverityLevel(event.severity) === 'high');
     const hasMediumStress = regionStressEvents.some(event => getSeverityLevel(event.severity) === 'medium');
 
@@ -308,7 +305,7 @@ const MapView = () => {
                               ) : null;
                             })()}
                             {(() => {
-                              const regionStressEvents = stressEvents.filter(event => event.region?.id === region.id);
+                              const regionStressEvents = stressEvents.filter(event => regionIdOf(event) === region.id);
                               return regionStressEvents.length > 0 ? (
                                 <div className="mt-2">
                                   <p className="text-sm font-medium text-red-600">
@@ -327,17 +324,10 @@ const MapView = () => {
                     <LayerGroup>
                       {stressEvents.map((event) => {
                         // Calculate center point of region for marker placement
-                        let centerLat = 0, centerLng = 0;
-                        if (event.region?.geometry?.coordinates?.[0]) {
-                          const coords = event.region.geometry.coordinates[0];
-                          const sum = coords.reduce((acc, coord) => {
-                            acc.lat += coord[1];
-                            acc.lng += coord[0];
-                            return acc;
-                          }, { lat: 0, lng: 0 });
-                          centerLat = sum.lat / coords.length;
-                          centerLng = sum.lng / coords.length;
-                        }
+                        // Use the event's own footprint, falling back to its region's
+                        const eventRegion = regions.find(r => r.id === regionIdOf(event));
+                        const [centerLat, centerLng] =
+                          geometryCenter(event.geometry) || geometryCenter(eventRegion?.geometry) || [0, 0];
 
                         const severityLevel = getSeverityLevel(event.severity);
                         const severityColor = severityLevel === 'high' ? '#ef4444' :
@@ -676,7 +666,7 @@ const MapView = () => {
                   })()}
 
                   {(() => {
-                    const regionStressEvents = stressEvents.filter(event => event.region?.id === selectedRegion.id);
+                    const regionStressEvents = stressEvents.filter(event => regionIdOf(event) === selectedRegion.id);
                     return regionStressEvents.length > 0 ? (
                       <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">

@@ -9,12 +9,14 @@ import { Badge } from '../components/ui/badge';
 import { formatArea, getVegetationIndexLabel } from '../lib/utils';
 import { MapPin, RefreshCcw, Plus, Activity } from 'lucide-react';
 import { toast } from 'sonner';
+import { listFromResponse } from '../lib/geojson';
 
 const Regions = () => {
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['regions'],
     queryFn: () => regionsAPI.getRegions(),
   });
+  const regions = listFromResponse(data);
 
   const handleBatchAnalysis = async (regionId) => {
     try {
@@ -70,7 +72,7 @@ const Regions = () => {
             <div className="py-12 text-center text-gray-600 dark:text-gray-400">Loading regions...</div>
           ) : isError ? (
             <div className="py-12 text-center text-red-600">Failed to load regions.</div>
-          ) : data?.results?.length ? (
+          ) : regions.length ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -83,13 +85,13 @@ const Regions = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.results.map((region) => (
+                  {regions.map((region) => (
                     <TableRow key={region.id}>
                       <TableCell className="font-medium flex items-center gap-2">
                         <MapPin className="h-4 w-4 text-gray-400" />
                         {region.name}
                       </TableCell>
-                      <TableCell>{formatArea(region.area_km2)}</TableCell>
+                      <TableCell>{formatArea(region.area_hectares != null ? region.area_hectares / 100 : null)}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {getVegetationIndexLabel(region.ndvi, 'NDVI')}

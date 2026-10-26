@@ -47,6 +47,7 @@ import {
   formatNumber,
   formatArea
 } from '../lib/utils';
+import { toFlatFeatureList } from '../lib/geojson';
 
 // Several endpoints backed by GeoDjango models (regions, stress events, conflict
 // events) are served by a GeoFeatureModelSerializer, so their list data comes
@@ -54,15 +55,8 @@ import {
 // plain array, with each item's fields nested under `.properties`. Normalize
 // to flat objects so callers can use region.name / event.severity etc. as if
 // it were a regular DRF list response.
-export const toFlatFeatureList = (value) => {
-  if (!value) return [];
-  const features = Array.isArray(value) ? value : (value.features || []);
-  return features.map(feature =>
-    feature && feature.type === 'Feature'
-      ? { id: feature.id, ...feature.properties, geometry: feature.geometry }
-      : feature
-  );
-};
+// Moved to lib/geojson.js so every page can use it; re-exported for existing imports.
+export { toFlatFeatureList };
 
 const Dashboard = () => {
   const { user, hasPermission } = useAuth();

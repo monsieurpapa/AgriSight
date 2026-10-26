@@ -38,6 +38,7 @@ import {
 } from 'recharts';
 import { analyticsAPI, satelliteProcessingAPI, geospatialAPI } from '../lib/api';
 import { formatDate, formatRelativeTime, formatVegetationIndex, getVegetationIndexColor } from '../lib/utils';
+import { listFromResponse, toFlatFeatureList } from '../lib/geojson';
 
 const Analytics = () => {
   const [stressSummary, setStressSummary] = useState(null);
@@ -94,7 +95,7 @@ const Analytics = () => {
         
         setStressSummary(stressData);
         setConflictSummary(conflictData);
-        setRegions(regionsData.results || []);
+        setRegions(listFromResponse(regionsData));
         setTrendData(trendAnalysis);
         
         // Generate correlation analysis
@@ -576,7 +577,7 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {stressSummary?.recent_events?.slice(0, 5).map((event) => {
+                {toFlatFeatureList(stressSummary?.recent_events).slice(0, 5).map((event) => {
                   const severityLevel = normalizeSeverityLevel(event.severity);
                   return (
                   <div key={event.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -696,7 +697,7 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {conflictSummary?.recent_events?.slice(0, 5).map((event) => (
+                {toFlatFeatureList(conflictSummary?.recent_events).slice(0, 5).map((event) => (
                   <div key={event.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className="w-2 h-2 rounded-full bg-red-500" />

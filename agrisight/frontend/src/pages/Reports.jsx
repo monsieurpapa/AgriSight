@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { FileText, Download, Plus, RefreshCcw } from 'lucide-react';
+import { listFromResponse } from '../lib/geojson';
 
 const Reports = () => {
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
@@ -29,7 +30,7 @@ const Reports = () => {
   });
   const [formError, setFormError] = useState(null);
 
-  const regions = regionsData?.results || [];
+  const regions = listFromResponse(regionsData);
   const organizationId = orgData?.id;
 
   const reportTypes = useMemo(() => ([
