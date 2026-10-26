@@ -32,6 +32,9 @@ DJANGO_APPS = [
 
 THIRD_PARTY_APPS = [
     'rest_framework',
+    # Registers GeoJSON field mappings for DRF; without it GeoDjango geometry
+    # fields serialize as EWKT strings ("SRID=4326;MULTIPOLYGON(...)").
+    'rest_framework_gis',
     'corsheaders',
     'django_filters',
     'drf_spectacular',
