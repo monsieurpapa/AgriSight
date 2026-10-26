@@ -101,6 +101,16 @@ const authReducer = (state, action) => {
   }
 };
 
+// Session check retry policy for transient failures (rate limit, server restart, network blip)
+export const AUTH_CHECK_RETRY_DELAYS_MS = [1000, 2000];
+const AUTH_CHECK_TIMEOUT_MS = 10000;
+
+export const isTransientAuthError = (error) => {
+  if (error?.type === 'NETWORK_ERROR' || error?.type === 'TIMEOUT') return true;
+  const status = error?.status ?? error?.response?.status;
+  return status === 408 || status === 429 || (typeof status === 'number' && status >= 500);
+};
+
 // Create context
 const AuthContext = createContext();
 
@@ -128,26 +138,38 @@ export const AuthProvider = ({ children }) => {
   // Initialize auth state
   useEffect(() => {
     const initializeAuth = async () => {
-      try {
-        // For session authentication, check if user is authenticated by calling the user endpoint
-        const response = await authAPI.getCurrentUser();
-        dispatch({
-          type: AUTH_ACTIONS.LOGIN_SUCCESS,
-          payload: {
-            user: response.data,
-          },
-        });
-      } catch (error) {
-        // User is not authenticated - this is normal for unauthenticated users
-        console.log('User not authenticated:', error.message);
-        dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
+      // A 429/5xx/network failure says nothing about whether the session is
+      // valid. Treating it as "not authenticated" bounced logged-in users to
+      // /landing whenever the API was briefly throttled or restarting, so
+      // retry transient failures before giving up.
+      for (let attempt = 0; attempt <= AUTH_CHECK_RETRY_DELAYS_MS.length; attempt += 1) {
+        try {
+          // For session authentication, check if user is authenticated by calling the user endpoint
+          const response = await authAPI.getCurrentUser();
+          dispatch({
+            type: AUTH_ACTIONS.LOGIN_SUCCESS,
+            payload: {
+              user: response.data,
+            },
+          });
+          return;
+        } catch (error) {
+          if (isTransientAuthError(error) && attempt < AUTH_CHECK_RETRY_DELAYS_MS.length) {
+            await new Promise((resolve) => setTimeout(resolve, AUTH_CHECK_RETRY_DELAYS_MS[attempt]));
+            continue;
+          }
+          // User is not authenticated - this is normal for unauthenticated users
+          console.log('User not authenticated:', error?.message);
+          dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
+          return;
+        }
       }
     };
 
-    // Add timeout to prevent infinite loading
+    // Add timeout to prevent infinite loading (covers the transient-error retries above)
     const timeoutId = setTimeout(() => {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
-    }, 5000); // 5 second timeout
+    }, AUTH_CHECK_TIMEOUT_MS);
 
     initializeAuth().finally(() => {
       clearTimeout(timeoutId);

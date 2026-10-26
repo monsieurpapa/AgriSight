@@ -358,6 +358,14 @@ HDX_API_TOKEN = config('HDX_API_TOKEN', default='')
 HDX_RESOURCE_ID = config('HDX_RESOURCE_ID', default='')
 HDX_BASE_URL = config('HDX_BASE_URL', default='https://data.humdata.org/api/3/action/datastore_search')
 
+# API rate limiting (apps.core.middleware.RateLimitMiddleware) — counters live in the
+# shared cache so they are consistent across gunicorn workers and restarts.
+API_RATE_LIMIT_REQUESTS = config('API_RATE_LIMIT_REQUESTS', default=1000, cast=int)
+API_RATE_LIMIT_WINDOW_SECONDS = config('API_RATE_LIMIT_WINDOW_SECONDS', default=3600, cast=int)
+# Number of reverse proxies in front of Django. Leave 0 unless X-Forwarded-For is
+# set by a proxy you control; otherwise clients could spoof their IP.
+API_RATE_LIMIT_TRUSTED_PROXIES = config('API_RATE_LIMIT_TRUSTED_PROXIES', default=0, cast=int)
+
 # Cache configuration
 CACHES = {
     'default': {

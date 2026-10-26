@@ -230,53 +230,92 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
 
 class RateLimitMiddleware(MiddlewareMixin):
     """
-    Simple rate limiting middleware.
+    Fixed-window API rate limiting backed by the shared Django cache (Redis).
+
+    Previously this kept counters in a per-process dict with a hard 100
+    requests/hour/IP budget. A single dashboard load uses ~60 API calls, so
+    users were throttled within a couple of page views; the resulting 429 on
+    /api/auth/user/ made the SPA treat them as logged out. Counters were also
+    per gunicorn worker and reset on restart, and the client IP was taken from
+    a spoofable X-Forwarded-For header.
+
+    Settings (all optional):
+      API_RATE_LIMIT_REQUESTS          requests allowed per window (default 1000)
+      API_RATE_LIMIT_WINDOW_SECONDS    window length (default 3600)
+      API_RATE_LIMIT_EXEMPT_PATHS      path prefixes never counted
+      API_RATE_LIMIT_TRUSTED_PROXIES   number of reverse proxies in front of
+                                       Django; X-Forwarded-For is only used
+                                       when this is > 0 (default 0)
     """
-    
+
+    CACHE_KEY_PREFIX = 'ratelimit:api'
+    DEFAULT_EXEMPT_PATHS = (
+        # Cheap session-bootstrap reads the SPA makes on every full page load.
+        '/api/auth/csrf/',
+        '/api/auth/config/',
+        '/api/auth/user/',
+    )
+
     def __init__(self, get_response):
         self.get_response = get_response
-        self.requests = {}  # In production, use Redis
         super().__init__(get_response)
-    
+
+    @property
+    def limit(self):
+        return int(getattr(settings, 'API_RATE_LIMIT_REQUESTS', 1000))
+
+    @property
+    def window(self):
+        return int(getattr(settings, 'API_RATE_LIMIT_WINDOW_SECONDS', 3600))
+
+    @property
+    def exempt_paths(self):
+        return tuple(getattr(settings, 'API_RATE_LIMIT_EXEMPT_PATHS', self.DEFAULT_EXEMPT_PATHS))
+
     def process_request(self, request):
         """Check rate limits."""
-        if request.path.startswith('/api/'):
-            client_ip = self._get_client_ip(request)
-            current_time = time.time()
-            
-            # Clean old entries (older than 1 hour)
-            self._cleanup_old_entries(current_time)
-            
-            # Check rate limit (100 requests per hour per IP)
-            if client_ip in self.requests:
-                request_count = len([t for t in self.requests[client_ip] if current_time - t < 3600])
-                if request_count >= 100:
-                    return JsonResponse({
-                        'error': 'Rate Limit Exceeded',
-                        'message': 'Too many requests. Please try again later.'
-                    }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-            else:
-                self.requests[client_ip] = []
-            
-            # Add current request
-            self.requests[client_ip].append(current_time)
-    
+        if not request.path.startswith('/api/'):
+            return None
+        if request.method == 'OPTIONS' or request.path.startswith(self.exempt_paths):
+            return None
+
+        client_ip = self._get_client_ip(request)
+        window_start = int(time.time() // self.window)
+        key = f'{self.CACHE_KEY_PREFIX}:{client_ip}:{window_start}'
+
+        try:
+            # add() is a no-op if the key exists; incr() is atomic in Redis.
+            cache.add(key, 0, timeout=self.window + 60)
+            request_count = cache.incr(key)
+        except Exception as exc:  # cache unavailable -> fail open, never block users
+            logger.warning('Rate limit cache unavailable, allowing request: %s', exc)
+            return None
+
+        if request_count > self.limit:
+            retry_after = self.window - int(time.time() % self.window)
+            response = JsonResponse({
+                'error': 'Rate Limit Exceeded',
+                'message': 'Too many requests. Please try again later.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            response['Retry-After'] = str(max(retry_after, 1))
+            return response
+        return None
+
     def _get_client_ip(self, request):
-        """Get client IP address."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
-    
-    def _cleanup_old_entries(self, current_time):
-        """Remove entries older than 1 hour."""
-        cutoff_time = current_time - 3600
-        for ip in list(self.requests.keys()):
-            self.requests[ip] = [t for t in self.requests[ip] if t > cutoff_time]
-            if not self.requests[ip]:
-                del self.requests[ip]
+        """
+        Get the client IP. X-Forwarded-For is client-controlled, so it is only
+        consulted when API_RATE_LIMIT_TRUSTED_PROXIES is set, and then we take
+        the entry appended by the outermost trusted proxy (counting from the
+        right), not the spoofable left-most entry.
+        """
+        trusted = int(getattr(settings, 'API_RATE_LIMIT_TRUSTED_PROXIES', 0))
+        remote_addr = request.META.get('REMOTE_ADDR', 'unknown')
+        if trusted <= 0:
+            return remote_addr
+        forwarded = [ip.strip() for ip in request.META.get('HTTP_X_FORWARDED_FOR', '').split(',') if ip.strip()]
+        if not forwarded:
+            return remote_addr
+        return forwarded[-trusted] if len(forwarded) >= trusted else forwarded[0]
 
 
 class APIVersionMiddleware(MiddlewareMixin):

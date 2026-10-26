@@ -2,7 +2,7 @@
 Comprehensive tests for core middleware and utilities.
 """
 
-from django.test import TestCase, TransactionTestCase, RequestFactory, Client
+from django.test import TestCase, TransactionTestCase, RequestFactory, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.http import HttpResponse
 from django.core.exceptions import ValidationError, PermissionDenied
@@ -144,34 +144,68 @@ class SecurityHeadersMiddlewareTest(TestCase):
         self.assertIn('Strict-Transport-Security', processed_response)
 
 
+@override_settings(
+    CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'ratelimit-tests'}},
+    API_RATE_LIMIT_REQUESTS=5,
+    API_RATE_LIMIT_WINDOW_SECONDS=3600,
+    API_RATE_LIMIT_TRUSTED_PROXIES=0,
+)
 class RateLimitMiddlewareTest(TestCase):
     """Test rate limiting middleware."""
-    
+
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
         self.factory = RequestFactory()
         self.middleware = RateLimitMiddleware(get_response=lambda req: HttpResponse())
-    
+
+    def _hit(self, path='/api/v1/geospatial/regions/', **extra):
+        return self.middleware.process_request(self.factory.get(path, **extra))
+
     def test_rate_limit_normal_requests(self):
-        """Test that normal requests pass through."""
-        request = self.factory.get('/api/test/')
-        
-        response = self.middleware.process_request(request)
-        
-        self.assertIsNone(response)  # No rate limiting
-    
+        """Requests under the limit pass through."""
+        self.assertIsNone(self._hit())
+
     def test_rate_limit_exceeded(self):
-        """Test rate limiting when limit is exceeded."""
-        request = self.factory.get('/api/test/')
-        
-        # Simulate many requests
-        now = __import__('time').time()
-        for _ in range(101):  # Exceed the limit of 100
-            self.middleware.requests.setdefault('127.0.0.1', []).append(now)
-        
-        response = self.middleware.process_request(request)
-        
+        """The request after the configured limit gets a 429 with Retry-After."""
+        for _ in range(5):
+            self.assertIsNone(self._hit())
+        response = self._hit()
         self.assertIsNotNone(response)
         self.assertEqual(response.status_code, 429)
+        self.assertIn('Retry-After', response)
+
+    def test_counter_is_shared_across_middleware_instances(self):
+        """Regression: counts lived in a per-process dict, so each gunicorn worker had its own budget."""
+        other = RateLimitMiddleware(get_response=lambda req: HttpResponse())
+        for _ in range(5):
+            other.process_request(self.factory.get('/api/v1/organizations/'))
+        self.assertEqual(self._hit().status_code, 429)
+
+    def test_auth_bootstrap_endpoints_are_exempt(self):
+        """Regression: a 429 on /api/auth/user/ made the SPA log the user out."""
+        for _ in range(5):
+            self._hit()
+        for path in ('/api/auth/user/', '/api/auth/config/', '/api/auth/csrf/'):
+            self.assertIsNone(self._hit(path))
+
+    def test_non_api_paths_are_not_limited(self):
+        for _ in range(10):
+            self.assertIsNone(self._hit('/admin/login/'))
+
+    def test_spoofed_forwarded_for_is_ignored_without_trusted_proxies(self):
+        """Regression: rotating X-Forwarded-For used to give every request a fresh budget."""
+        for i in range(5):
+            self._hit(HTTP_X_FORWARDED_FOR=f'10.0.0.{i}')
+        self.assertEqual(self._hit(HTTP_X_FORWARDED_FOR='10.9.9.9').status_code, 429)
+
+    @override_settings(API_RATE_LIMIT_TRUSTED_PROXIES=1)
+    def test_forwarded_for_used_behind_trusted_proxy(self):
+        """With one trusted proxy, the right-most X-Forwarded-For entry identifies the client."""
+        for _ in range(5):
+            self._hit(HTTP_X_FORWARDED_FOR='6.6.6.6, 203.0.113.7')
+        self.assertEqual(self._hit(HTTP_X_FORWARDED_FOR='1.1.1.1, 203.0.113.7').status_code, 429)
+        self.assertIsNone(self._hit(HTTP_X_FORWARDED_FOR='203.0.113.8'))
 
 
 class HealthCheckMiddlewareTest(TestCase):
