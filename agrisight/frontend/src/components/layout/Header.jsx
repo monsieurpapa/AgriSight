@@ -21,12 +21,17 @@ import {
 } from '../ui/dropdown-menu';
 import { Badge } from '../ui/badge';
 import { useAuth } from '../../contexts/AuthContext';
-import { cn } from '../../lib/utils';
+import { cn, formatRelativeTime } from '../../lib/utils';
+import { useNavCounts, useRecentAlerts, formatBadgeCount } from '../../hooks/useNavCounts';
 
 const Header = ({ onMenuToggle, isMobileMenuOpen }) => {
   const { user, organization, logout, getUserTypeLabel } = useAuth();
   const navigate = useNavigate();
-  const [notificationCount] = useState(3); // Mock notification count
+  const { unreadAlerts } = useNavCounts();
+  const notificationBadge = formatBadgeCount(unreadAlerts);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  // Only load the list when the menu is opened
+  const { data: recentAlerts, isLoading: recentAlertsLoading } = useRecentAlerts(notificationsOpen);
 
   const handleLogout = async () => {
     await logout();
@@ -92,16 +97,21 @@ const Header = ({ onMenuToggle, isMobileMenuOpen }) => {
           {/* Right side - Notifications and user menu */}
           <div className="flex items-center space-x-4">
             {/* Notifications */}
-            <DropdownMenu>
+            <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="relative"
+                  aria-label={unreadAlerts ? `Notifications, ${unreadAlerts} unread` : 'Notifications'}
+                >
                   <Bell className="h-5 w-5" />
-                  {notificationCount > 0 && (
+                  {notificationBadge && (
                     <Badge 
                       variant="destructive" 
-                      className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs p-0"
+                      className="absolute -top-1 -right-1 h-5 min-w-5 px-1 flex items-center justify-center text-xs font-mono"
                     >
-                      {notificationCount}
+                      {notificationBadge}
                     </Badge>
                   )}
                 </Button>
@@ -110,33 +120,35 @@ const Header = ({ onMenuToggle, isMobileMenuOpen }) => {
                 <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <div className="max-h-64 overflow-y-auto">
-                  {/* Mock notifications */}
-                  <DropdownMenuItem className="flex flex-col items-start p-3">
-                    <div className="font-medium text-sm">Agricultural Stress Detected</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      NDVI values below threshold in Goma region
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">2 hours ago</div>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="flex flex-col items-start p-3">
-                    <div className="font-medium text-sm">Processing Complete</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Satellite imagery analysis finished for 3 regions
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">4 hours ago</div>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="flex flex-col items-start p-3">
-                    <div className="font-medium text-sm">New Report Available</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Weekly agricultural monitoring report is ready
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">1 day ago</div>
-                  </DropdownMenuItem>
+                  {recentAlertsLoading ? (
+                    <div className="p-3 text-sm text-gray-500">Loading…</div>
+                  ) : Array.isArray(recentAlerts) && recentAlerts.length > 0 ? (
+                    recentAlerts.slice(0, 5).map((alert) => (
+                      <DropdownMenuItem
+                        key={alert.id}
+                        className="flex flex-col items-start p-3"
+                        onSelect={() => navigate('/alerts')}
+                      >
+                        <div className={cn('text-sm', alert.is_read ? 'text-gray-600' : 'font-medium')}>
+                          {alert.title}
+                        </div>
+                        {alert.message && (
+                          <div className="text-xs text-gray-500 mt-1 line-clamp-2">{alert.message}</div>
+                        )}
+                        <div className="text-xs text-gray-400 mt-1 font-mono">
+                          {formatRelativeTime(alert.created_at)}
+                        </div>
+                      </DropdownMenuItem>
+                    ))
+                  ) : (
+                    <div className="p-3 text-sm text-gray-500">No notifications</div>
+                  )}
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-center text-sm text-blue-600 hover:text-blue-700">
+                <DropdownMenuItem
+                  className="text-center text-sm text-blue-600 hover:text-blue-700"
+                  onSelect={() => navigate('/alerts')}
+                >
                   View all notifications
                 </DropdownMenuItem>
               </DropdownMenuContent>

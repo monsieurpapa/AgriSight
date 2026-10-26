@@ -890,3 +890,43 @@ class IngestBatchJobOutputsTest(TestCase):
 
         self.assertEqual(count, 0)
         self.assertEqual(SatelliteImage.objects.count(), 0)
+
+
+class RegionVegetationRouteRegressionTests(TestCase):
+    """
+    Regression: the routes used <uuid:region_id> but Region ids are integers
+    (BigAutoField), so /vegetation/<id>/ and /batch/region/<id>/ never matched
+    and the dashboard trend chart got only 404s.
+    Report: docs/qa/qa-report-2026-10-26.md (P1 #7)
+    """
+
+    def setUp(self):
+        from django.contrib.gis.geos import MultiPolygon, Polygon
+        from rest_framework.test import APIClient
+        User = get_user_model()
+        self.admin = User.objects.create_user(
+            username='veg-admin', email='veg-admin@example.com', password='x', user_type='admin')
+        self.region = Region.objects.create(
+            name='Masisi', code='CD6104', country='DRC', province='North Kivu',
+            geometry=MultiPolygon(Polygon(((28.7, -1.6), (29.1, -1.6), (29.1, -1.2), (28.7, -1.2), (28.7, -1.6))), srid=4326))
+        image = SatelliteImage.objects.create(
+            region=self.region, acquisition_date=timezone.now() - timedelta(days=3), satellite_name='Sentinel-2',
+            cloud_cover_percentage=5, resolution_meters=10, bands_available=['B04', 'B08'],
+            image_path='/tmp/x.tif', is_processed=True)
+        VegetationIndex.objects.create(
+            satellite_image=image, index_type='NDVI', mean_value=0.61, min_value=0.2, max_value=0.9,
+            std_deviation=0.1, raster_path='/tmp/ndvi.tif')
+        self.client = APIClient()
+        self.client.force_authenticate(self.admin)
+
+    def test_vegetation_route_accepts_integer_region_id(self):
+        resp = self.client.get(f'/api/v1/satellite-processing/vegetation/{self.region.id}/?days=30')
+        self.assertEqual(resp.status_code, 200, resp.content[:200])
+        self.assertEqual(resp.data['region_name'], 'Masisi')
+        self.assertEqual(resp.data['total_records'], 1)
+        self.assertAlmostEqual(resp.data['summary_statistics']['NDVI']['latest'], 0.61)
+
+    def test_batch_jobs_route_accepts_integer_region_id(self):
+        resp = self.client.get(f'/api/v1/satellite-processing/batch/region/{self.region.id}/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, [])

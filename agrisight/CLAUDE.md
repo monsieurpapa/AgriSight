@@ -104,7 +104,7 @@ Key contexts in `src/contexts/`:
 - `WebSocketContext.jsx` — live alert feeds
 - `ErrorContext.jsx` — global toast/error notifications
 
-**API client** (`src/lib/apiClient.js`): Axios instance with CSRF token injection, auto-retry (3× with exponential backoff for 408/429/5xx), auto-redirect to `/login` on 401, and standardized error objects.
+**API client** (`src/lib/apiClient.js`): Axios instance with CSRF token injection (read from the `csrftoken` cookie on every write), auto-retry of idempotent GET/HEAD/OPTIONS only (3× with backoff for 408/429/502/503/504, honouring `Retry-After`; writes are never retried), auto-redirect to `/login` on 401, and standardized error objects.
 
 **Auth flow**:
 1. GET `/api/auth/csrf/` → store token in axios interceptor state

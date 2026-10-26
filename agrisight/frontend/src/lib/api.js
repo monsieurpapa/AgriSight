@@ -34,6 +34,27 @@ export const alertsAPI = {
   }
 };
 
+export const systemAPI = {
+  /**
+   * Admin-only service health (database / redis / celery). The endpoint
+   * answers 503 with the same body when something is down, so return that
+   * body instead of throwing; non-admins get null.
+   */
+  async getDetailedHealth() {
+    const startedAt = performance.now();
+    try {
+      const data = await get('/api/health/detailed/', { noRetry: true, timeout: 10000 });
+      return { ...data, latencyMs: Math.round(performance.now() - startedAt) };
+    } catch (error) {
+      if (error?.status === 503 && error?.data?.services) {
+        return { ...error.data, latencyMs: Math.round(performance.now() - startedAt) };
+      }
+      if (error?.status === 403) return null;
+      throw error;
+    }
+  },
+};
+
 export const reportsAPI = {
   getReports(params = {}) {
     const queryParams = new URLSearchParams(params).toString();

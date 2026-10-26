@@ -122,6 +122,7 @@ class AnalyticsSummaryTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["total_events"], 1)
+        self.assertEqual(data["recent_events_count"], 1)
         self.assertIn("events_by_type", data)
         self.assertEqual(sum(data["events_by_type"].values()), 1)
 

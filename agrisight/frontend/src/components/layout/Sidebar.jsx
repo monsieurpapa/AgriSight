@@ -22,10 +22,12 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavCounts, formatBadgeCount } from '../../hooks/useNavCounts';
 
 const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { user, hasRole, hasPermission, getUserType, getUserTypeLabel } = useAuth();
+  const navCounts = useNavCounts();
 
   const navigationItems = [
     {
@@ -88,7 +90,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           href: '/stress-events',
           icon: AlertTriangle,
           description: 'Agricultural stress monitoring',
-          badge: '3',
+          badgeKey: 'recentStressEvents',
           permission: 'view_stress_events',
         },
         {
@@ -96,7 +98,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           href: '/alerts',
           icon: Bell,
           description: 'System notifications',
-          badge: '5',
+          badgeKey: 'unreadAlerts',
           permission: 'view_data',
         },
         {
@@ -259,12 +261,13 @@ const Sidebar = ({ isOpen, onClose }) => {
                         )}
                       />
                       <span className="flex-1">{item.name}</span>
-                      {item.badge && (
+                      {item.badgeKey && formatBadgeCount(navCounts[item.badgeKey]) && (
                         <Badge 
                           variant={isActive ? "default" : "secondary"}
-                          className="ml-2 text-xs"
+                          className="ml-2 text-xs font-mono"
+                          aria-label={`${navCounts[item.badgeKey]} ${item.badgeKey === 'unreadAlerts' ? 'unread alerts' : 'stress events in the last 30 days'}`}
                         >
-                          {item.badge}
+                          {formatBadgeCount(navCounts[item.badgeKey])}
                         </Badge>
                       )}
                     </Link>
