@@ -176,6 +176,7 @@ def stress_event_summary(request):
     
     summary_data = {
         'total_events': total_events,
+        'recent_events_count': recent_events.count(),
         'events_by_type': events_by_type,
         'events_by_severity': events_by_severity,
         'total_affected_area': total_affected_area,

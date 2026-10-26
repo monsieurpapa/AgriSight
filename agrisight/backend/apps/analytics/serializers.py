@@ -74,6 +74,8 @@ class StressEventSummarySerializer(serializers.Serializer):
     """Serializer for stress event summary statistics."""
     
     total_events = serializers.IntegerField()
+    # Events detected within the `days` window (recent_events itself is capped at 10)
+    recent_events_count = serializers.IntegerField()
     events_by_type = serializers.DictField()
     events_by_severity = serializers.DictField()
     total_affected_area = serializers.FloatField()
