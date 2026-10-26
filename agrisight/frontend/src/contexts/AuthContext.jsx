@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { authAPI } from '../lib/authAPI';
 import { getErrorMessage } from '../lib/utils';
+import { getRoleCode } from '../lib/roles';
 import { AUTH_CHECK_RETRY_DELAYS_MS, AUTH_CHECK_TIMEOUT_MS, isTransientAuthError } from '../lib/authRetry';
 
 // Initial state
@@ -375,8 +376,7 @@ export const AuthProvider = ({ children }) => {
   // (found 2026-07-30 while verifying the ISSUE-004 fix).
   const hasRole = useCallback((role) => {
     if (!state.user) return false;
-    // Handle both user_type and user_type_code for backward compatibility
-    return state.user.user_type === role || state.user.user_type_code === role;
+    return getRoleCode(state.user) === role;
   }, [state.user]);
 
   const isAdmin = useCallback(() => hasRole('admin'), [hasRole]);
@@ -402,7 +402,7 @@ export const AuthProvider = ({ children }) => {
         'researcher': ['view_data', 'view_analytics', 'export_data', 'view_stress_events', 'view_conflict_events']
       };
 
-    const userRole = state.user.user_type || state.user.user_type_code;
+    const userRole = getRoleCode(state.user);
     const permissions = rolePermissions[userRole] || [];
 
     return permissions.includes('*') || permissions.includes(permission);
@@ -410,7 +410,7 @@ export const AuthProvider = ({ children }) => {
 
   const getUserType = useCallback(() => {
     if (!state.user) return null;
-    return state.user.user_type || state.user.user_type_code;
+    return getRoleCode(state.user);
   }, [state.user]);
 
   const getUserTypeLabel = useCallback(() => {
