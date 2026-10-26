@@ -10,7 +10,7 @@ urlpatterns = [
     path('ingest/', views.manual_data_ingestion, name='manual_ingestion'),
     
     # Vegetation data endpoints
-    path('vegetation/<uuid:region_id>/', views.get_region_vegetation_data, name='vegetation_data'),
+    path('vegetation/<int:region_id>/', views.get_region_vegetation_data, name='vegetation_data'),
     path('trend-analysis/', views.generate_trend_analysis, name='trend_analysis'),
     
     # Statistics and monitoring
@@ -19,6 +19,6 @@ urlpatterns = [
 
     # Batch V2 endpoints
     path('batch/process/', views.trigger_batch_processing_view, name='trigger_batch_processing'),
-    path('batch/region/<uuid:region_id>/', views.get_region_batch_jobs, name='region_batch_jobs'),
+    path('batch/region/<int:region_id>/', views.get_region_batch_jobs, name='region_batch_jobs'),
     path('batch/status/<str:job_id>/', views.get_batch_job_status, name='batch_job_status'),
 ]
